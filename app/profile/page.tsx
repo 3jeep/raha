@@ -1,4 +1,4 @@
- "use client";
+"use client";
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -7,10 +7,10 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 
-// استدعاء الخريطة من نفس المجلد مع تعطيل SSR لمنع خطأ window is not defined
+// استدعاء الخريطة مع تعطيل SSR
 const MapComponent = dynamic(() => import("./MapComponent"), { 
   ssr: false,
-  loading: () => <div className="h-64 bg-gray-100 animate-pulse flex items-center justify-center rounded-[35px] font-black text-[10px] text-gray-400">جاري تحميل الخريطة...</div>
+  loading: () => <div className="h-64 bg-gray-100 animate-pulse flex items-center justify-center rounded-[35px] font-black text-[10px] text-gray-500">جاري تحميل الخريطة...</div>
 });
 
 // مكون التنقل السفلي
@@ -22,11 +22,11 @@ function BottomNav() {
     { name: "حسابي", icon: "👤", path: "/profile" },
   ];
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-[#1E293B]/95 backdrop-blur-md h-16 rounded-[25px] shadow-2xl flex items-center justify-around px-6 z-50 border border-white/10">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-[#1E293B] h-16 rounded-[25px] shadow-2xl flex items-center justify-around px-6 z-50 border border-white/20">
       {navItems.map((item) => (
-        <Link key={item.path} href={item.path} className={`flex flex-col items-center transition-all ${pathname === item.path ? 'scale-110 opacity-100' : 'opacity-40'}`}>
+        <Link key={item.path} href={item.path} className={`flex flex-col items-center transition-all ${pathname === item.path ? 'scale-110 opacity-100' : 'opacity-50'}`}>
           <span className="text-xl">{item.icon}</span>
-          <span className="text-[8px] font-black text-white mt-1">{item.name}</span>
+          <span className="text-[9px] font-black text-white mt-1 uppercase tracking-tighter">{item.name}</span>
         </Link>
       ))}
     </div>
@@ -106,82 +106,82 @@ export default function ProfilePage() {
     } catch (err) { alert("❌ فشل الحفظ"); } finally { setIsSaving(false); }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center font-black italic text-blue-900">جاري التحميل...</div>;
+  if (loading) return <div className="h-screen flex items-center justify-center font-black italic text-blue-900 text-lg">جاري التحميل...</div>;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-32 text-right font-sans" dir="rtl">
       
-      {/* هيدر البروفايل: الصورة والإيميل */}
-      <div className="bg-[#2B4C7E] text-white pt-16 pb-28 px-8 rounded-b-[50px] shadow-xl text-center relative overflow-hidden">
+      {/* هيدر البروفايل */}
+      <div className="bg-[#1E293B] text-white pt-16 pb-28 px-8 rounded-b-[50px] shadow-2xl text-center relative overflow-hidden">
         <div className="relative z-10">
           <img 
             src={user?.photoURL || `https://ui-avatars.com/api/?name=${profile.fullName || 'User'}&background=random`} 
-            className="w-20 h-20 rounded-full border-4 border-white/20 mx-auto mb-3 shadow-lg object-cover" 
+            className="w-24 h-24 rounded-full border-4 border-white/30 mx-auto mb-4 shadow-xl object-cover" 
             alt="User"
           />
-          <h1 className="text-xl font-black italic">{profile.fullName || "مستخدم جديد"}</h1>
-          <p className="text-[9px] opacity-60 font-bold tracking-widest">{user?.email}</p>
+          <h1 className="text-2xl font-black italic tracking-tight">{profile.fullName || "مستخدم جديد"}</h1>
+          <p className="text-[10px] opacity-90 font-black tracking-widest text-blue-300 mt-1 uppercase">{user?.email}</p>
         </div>
       </div>
 
       <div className="px-6 -mt-16 max-w-lg mx-auto space-y-5 relative z-10">
         
         {/* بطاقة الموقع الجغرافي */}
-        <div className="bg-white p-6 rounded-[35px] shadow-xl shadow-blue-900/5 border border-gray-50 space-y-3">
+        <div className="bg-white p-6 rounded-[35px] shadow-xl border border-gray-100 space-y-3">
            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-blue-600 uppercase italic">الموقع الجغرافي 📍</span>
+              <span className="text-[11px] font-black text-blue-700 uppercase italic">الموقع الجغرافي 📍</span>
               <button 
                 type="button" 
                 onClick={handleGetLocation}
-                className="bg-blue-600 text-white px-5 py-2 rounded-xl text-[9px] font-black shadow-md active:scale-95 transition-all"
+                className="bg-blue-600 text-white px-5 py-2.5 rounded-2xl text-[10px] font-black shadow-lg active:scale-95 transition-all"
               >
                 تحديد موقعي
               </button>
            </div>
            {profile.latitude ? (
-             <div className="flex justify-between items-center text-[9px] font-bold text-green-600 bg-green-50 p-3 rounded-2xl">
+             <div className="flex justify-between items-center text-[10px] font-black text-green-700 bg-green-50 p-4 rounded-2xl border border-green-100">
                <span>الموقع مربوط بنجاح ✅</span>
-               <button type="button" onClick={() => setShowMapModal(true)} className="underline">تعديل يدوي</button>
+               <button type="button" onClick={() => setShowMapModal(true)} className="underline text-blue-600">تعديل يدوي</button>
              </div>
            ) : (
-             <p className="text-[9px] text-gray-400 italic">يساعدنا موقعك الجغرافي في توصيل طلباتك بدقة وسرعة</p>
+             <p className="text-[10px] text-gray-600 font-bold italic leading-relaxed">يساعدنا موقعك الجغرافي في توصيل طلباتك بدقة وسرعة</p>
            )}
         </div>
 
         {/* نموذج البيانات */}
-        <form onSubmit={handleUpdateProfile} className="bg-white p-8 rounded-[40px] shadow-xl shadow-blue-900/5 space-y-4 border border-gray-100">
-          <div className="space-y-1">
-            <label className="text-[9px] font-black text-gray-400 mr-2">الاسم الكامل</label>
-            <input required value={profile.fullName} onChange={e => setProfile({...profile, fullName: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-black outline-none border-none focus:ring-2 ring-blue-100" />
+        <form onSubmit={handleUpdateProfile} className="bg-white p-8 rounded-[40px] shadow-xl space-y-5 border border-gray-100">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-gray-500 mr-2 block">الاسم الكامل</label>
+            <input required value={profile.fullName} onChange={e => setProfile({...profile, fullName: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 text-sm font-black text-gray-900 outline-none border-2 border-transparent focus:border-blue-100 transition-colors" />
           </div>
 
-          <div className="space-y-1">
-            <label className="text-[9px] font-black text-gray-400 mr-2">رقم الهاتف</label>
-            <input required value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-black outline-none text-left" dir="ltr" />
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-gray-500 mr-2 block">رقم الهاتف</label>
+            <input required value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 text-sm font-black text-gray-900 outline-none text-left border-2 border-transparent focus:border-blue-100 transition-colors" dir="ltr" />
           </div>
 
-          <div className="space-y-1">
-            <label className="text-[9px] font-black text-gray-400 mr-2">العنوان الوصفي</label>
-            <textarea value={profile.address} onChange={e => setProfile({...profile, address: e.target.value})} placeholder="المنطقة، الشارع، المعالم..." className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-black outline-none h-20 resize-none border-none focus:ring-2 ring-blue-100" />
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-gray-500 mr-2 block">العنوان الوصفي</label>
+            <textarea value={profile.address} onChange={e => setProfile({...profile, address: e.target.value})} placeholder="المنطقة، الشارع، المعالم..." className="w-full p-4 rounded-2xl bg-gray-50 text-sm font-black text-gray-900 outline-none h-24 resize-none border-2 border-transparent focus:border-blue-100 transition-colors placeholder:text-gray-400" />
           </div>
 
-          <button type="submit" disabled={isSaving} className="w-full py-5 rounded-[30px] font-black text-xs shadow-xl bg-[#2B4C7E] text-white active:scale-95 transition-all">
+          <button type="submit" disabled={isSaving} className="w-full py-5 rounded-[30px] font-black text-xs shadow-xl bg-[#1E293B] text-white active:scale-95 transition-all mt-2">
             {isSaving ? "جاري الحفظ..." : "حفظ التغييرات ✨"}
           </button>
         </form>
 
-        <button onClick={() => auth.signOut()} className="w-full py-4 rounded-[30px] bg-red-50 text-red-500 font-black text-[10px] border border-red-100 mb-10">تسجيل الخروج 🚪</button>
+        <button onClick={() => auth.signOut()} className="w-full py-4 rounded-[30px] bg-red-50 text-red-600 font-black text-[11px] border border-red-100 mb-10 shadow-sm active:scale-95 transition-all">تسجيل الخروج 🚪</button>
       </div>
 
-      {/* نافذة الخريطة المنبثقة */}
+      {/* نافذة الخريطة */}
       {showMapModal && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end justify-center">
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-end justify-center">
           <div className="bg-white w-full max-w-xl rounded-t-[40px] p-6 h-[85vh] flex flex-col shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-               <h3 className="font-black text-sm italic">حدد موقعك على الخريطة 🗺️</h3>
-               <button onClick={() => setShowMapModal(false)} className="text-gray-400 font-bold px-2">إغلاق</button>
+            <div className="flex justify-between items-center mb-6 px-2">
+               <h3 className="font-black text-lg text-gray-900 italic">حدد موقعك بدقة 🗺️</h3>
+               <button onClick={() => setShowMapModal(false)} className="text-red-500 font-black text-sm bg-red-50 px-4 py-2 rounded-2xl">إغلاق</button>
             </div>
-            <div className="flex-1 rounded-[35px] overflow-hidden border-2 border-gray-50 shadow-inner">
+            <div className="flex-1 rounded-[35px] overflow-hidden border-2 border-gray-100 shadow-inner bg-gray-50">
                 <MapComponent 
                    mapCenter={mapCenter} 
                    setProfile={setProfile} 
@@ -190,7 +190,7 @@ export default function ProfilePage() {
             </div>
             <button 
               onClick={() => setShowMapModal(false)}
-              className="w-full mt-6 py-5 bg-[#2B4C7E] text-white rounded-3xl font-black text-xs shadow-lg"
+              className="w-full mt-6 py-5 bg-[#1E293B] text-white rounded-3xl font-black text-sm shadow-xl"
             >
               تثبيت الموقع المختار ✅
             </button>

@@ -10,7 +10,7 @@ function CheckoutContent() {
   const searchParams = useSearchParams();
   const isInitialMount = useRef(false);
 
-  // جلب البيانات من الرابط
+  // جلب البيانات من الرابط (بما في ذلك الوصف)
   const pkgName = searchParams.get("pkgName");
   const pkgPrice = searchParams.get("pkgPrice");
   const pkgCategory = searchParams.get("category") || "single";
@@ -38,7 +38,6 @@ function CheckoutContent() {
     status: "pending"
   });
 
-  // دالة للعودة للرئيسية
   const goToHome = () => router.replace("/");
 
   useEffect(() => {
@@ -133,12 +132,10 @@ function CheckoutContent() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 text-right font-sans" dir="rtl">
       
-      {/* الهيدر */}
       <div className="relative h-[230px] w-full overflow-hidden rounded-b-[45px] shadow-xl flex items-center justify-center">
         <img src={pkgImage} className="absolute inset-0 w-full h-full object-cover" alt="Header" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#1E293B] via-[#1E293B]/80 to-transparent"></div>
 
-        {/* زر الرئيسية في الأعلى على اليسار */}
         <button 
           type="button" 
           onClick={goToHome} 
@@ -168,6 +165,13 @@ function CheckoutContent() {
       </div>
 
       <form onSubmit={handleSubmit} className="px-6 mt-6 space-y-4 max-w-lg mx-auto">
+        {/* عرض وصف العرض المجلوب */}
+        <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50 mb-2">
+           <p className="text-[10px] font-black text-blue-900 leading-relaxed italic">
+             {pkgDescription}
+           </p>
+        </div>
+
         <div className="bg-white p-5 rounded-[30px] shadow-sm border border-gray-50">
           <label className="text-[10px] font-black text-gray-900 block mb-3 italic">تحديد جنس المستلم:</label>
           <div className="grid grid-cols-2 gap-3">
@@ -181,7 +185,7 @@ function CheckoutContent() {
           <input disabled={isSubmitting} required type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="رقم الهاتف" className="w-full p-4 rounded-xl bg-gray-50 text-xs font-black outline-none text-gray-900 placeholder:text-gray-600 text-left" dir="ltr" />
           <div className="pt-2">
             <label className="text-[10px] font-black text-blue-900 block mb-2 italic">تاريخ الموعد المطلوب:</label>
-            <input disabled={isSubmitting} required type="date" min={new Date().toISOString().split('T')[0]} value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} className="w-full p-4 rounded-xl bg-blue-50/50 text-xs font-black outline-none" />
+            <input disabled={isSubmitting} required type="date" min={new Date().toISOString().split('T')[0]} value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} className="w-full p-4 rounded-xl bg-blue-50/50 text-xs font-black outline-none text-gray-900" />
           </div>
         </div>
 
@@ -194,7 +198,14 @@ function CheckoutContent() {
                {gpsStatus === "success" ? "تم تحديد الموقع ✅" : "ادخل العنوان يدوياً 📍"}
             </div>
           </div>
-          <textarea disabled={isSubmitting} required value={formData.locationText} onChange={e => setFormData({...formData, locationText: e.target.value})} placeholder="الحي، الشارع، المعالم القريبة..." className="w-full p-4 rounded-xl bg-gray-50 text-xs font-bold outline-none h-24 resize-none leading-relaxed" />
+          <textarea 
+            disabled={isSubmitting} 
+            required 
+            value={formData.locationText} 
+            onChange={e => setFormData({...formData, locationText: e.target.value})} 
+            placeholder="الحي، الشارع، المعالم القريبة..." 
+            className="w-full p-4 rounded-xl bg-gray-50 text-xs font-bold outline-none h-24 resize-none leading-relaxed text-gray-900 placeholder:text-gray-600" 
+          />
         </div>
 
         <div className="pt-2 space-y-3">
