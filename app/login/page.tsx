@@ -126,7 +126,7 @@ function LoginContent() {
           <input 
             type="email"
             required
-            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-300 text-right"
+            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-900 text-right"
             placeholder="example@mail.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -138,7 +138,7 @@ function LoginContent() {
           <input 
             type={showPassword ? "text" : "password"}
             required
-            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-300 text-right"
+            className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-gray-900 text-right"
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

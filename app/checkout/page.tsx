@@ -38,7 +38,7 @@ function CheckoutContent() {
     status: "pending"
   });
 
-  // دالة مخرج الطوارئ للعودة للرئيسية ومسح سجل التوجيه
+  // دالة للعودة للرئيسية
   const goToHome = () => router.replace("/");
 
   useEffect(() => {
@@ -49,7 +49,6 @@ function CheckoutContent() {
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
-        // توجيه لتسجيل الدخول مع حفظ رابط العودة
         router.push(`/login?redirect=${encodeURIComponent(window.location.href)}`);
         return;
       }
@@ -117,8 +116,6 @@ function CheckoutContent() {
       });
 
       alert("✅ تم إرسال طلبك بنجاح!");
-      
-      // استخدام replace لضمان عدم العودة لهذه الصفحة عند ضغط زر الرجوع
       router.replace("/my-chekout");
     } catch (err) {
       console.error("Submission Error:", err);
@@ -136,10 +133,19 @@ function CheckoutContent() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-24 text-right font-sans" dir="rtl">
       
-      {/* الهيدر المطور بأزرار تحكم ذكية */}
+      {/* الهيدر */}
       <div className="relative h-[230px] w-full overflow-hidden rounded-b-[45px] shadow-xl flex items-center justify-center">
         <img src={pkgImage} className="absolute inset-0 w-full h-full object-cover" alt="Header" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#1E293B] via-[#1E293B]/80 to-transparent"></div>
+
+        {/* زر الرئيسية في الأعلى على اليسار */}
+        <button 
+          type="button" 
+          onClick={goToHome} 
+          className="absolute top-10 left-6 px-4 h-9 bg-white/10 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white text-[10px] font-black italic z-20 transition-active active:scale-90"
+        >
+          الرئيسية 🏠
+        </button>
 
         <div className="relative z-10 text-center px-6 pt-2">
             <div className="inline-flex items-baseline gap-1 bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-xl border border-white/10 mb-2">
@@ -159,39 +165,29 @@ function CheckoutContent() {
               )}
             </div>
         </div>
-
-        {/* زر الرجوع التقليدي */}
-        <button type="button" onClick={() => router.back()} className="absolute top-10 right-6 w-9 h-9 bg-white/10 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white transition-active active:scale-90">
-          →
-        </button>
-
-        {/* زر مخرج الطوارئ للرئيسية */}
-        <button type="button" onClick={goToHome} className="absolute top-10 left-6 px-4 h-9 bg-white/10 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white text-[10px] font-black italic">
-          الرئيسية 🏠
-        </button>
       </div>
 
       <form onSubmit={handleSubmit} className="px-6 mt-6 space-y-4 max-w-lg mx-auto">
         <div className="bg-white p-5 rounded-[30px] shadow-sm border border-gray-50">
-          <label className="text-[10px] font-black text-gray-400 block mb-3 italic">تحديد جنس المستلم:</label>
+          <label className="text-[10px] font-black text-gray-900 block mb-3 italic">تحديد جنس المستلم:</label>
           <div className="grid grid-cols-2 gap-3">
-            <button disabled={isSubmitting} type="button" onClick={() => setFormData({...formData, gender: "female"})} className={`py-3 rounded-2xl text-[10px] font-black transition-all ${formData.gender === 'female' ? 'bg-pink-50 text-pink-600 border border-pink-100' : 'bg-gray-50 text-gray-400'}`}>👩 أنثى</button>
-            <button disabled={isSubmitting} type="button" onClick={() => setFormData({...formData, gender: "male"})} className={`py-3 rounded-2xl text-[10px] font-black transition-all ${formData.gender === 'male' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-gray-50 text-gray-400'}`}>👨 ذكر</button>
+            <button disabled={isSubmitting} type="button" onClick={() => setFormData({...formData, gender: "female"})} className={`py-3 rounded-2xl text-[10px] font-black transition-all ${formData.gender === 'female' ? 'bg-pink-50 text-pink-600 border border-pink-100' : 'bg-gray-50 text-gray-900'}`}>👩 أنثى</button>
+            <button disabled={isSubmitting} type="button" onClick={() => setFormData({...formData, gender: "male"})} className={`py-3 rounded-2xl text-[10px] font-black transition-all ${formData.gender === 'male' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-gray-50 text-gray-900'}`}>👨 ذكر</button>
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-[35px] shadow-sm border border-gray-50 space-y-4">
-          <input disabled={isSubmitting} required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} placeholder="الاسم الكامل" className="w-full p-4 rounded-xl bg-gray-50 text-xs font-black outline-none" />
-          <input disabled={isSubmitting} required type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="رقم الهاتف" className="w-full p-4 rounded-xl bg-gray-50 text-xs font-black outline-none text-left" dir="ltr" />
+          <input disabled={isSubmitting} required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} placeholder="الاسم الكامل" className="w-full p-4 rounded-xl bg-gray-50 text-xs font-black outline-none text-gray-900 placeholder:text-gray-600" />
+          <input disabled={isSubmitting} required type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="رقم الهاتف" className="w-full p-4 rounded-xl bg-gray-50 text-xs font-black outline-none text-gray-900 placeholder:text-gray-600 text-left" dir="ltr" />
           <div className="pt-2">
-            <label className="text-[10px] font-black text-blue-600 block mb-2 italic">تاريخ الموعد المطلوب:</label>
+            <label className="text-[10px] font-black text-blue-900 block mb-2 italic">تاريخ الموعد المطلوب:</label>
             <input disabled={isSubmitting} required type="date" min={new Date().toISOString().split('T')[0]} value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} className="w-full p-4 rounded-xl bg-blue-50/50 text-xs font-black outline-none" />
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-[35px] shadow-sm border border-gray-100 space-y-3">
           <div className="flex justify-between items-center mb-1">
-            <label className="text-[10px] font-black text-gray-400 italic">العنوان والموقع:</label>
+            <label className="text-[10px] font-black text-gray-900 italic">العنوان والموقع:</label>
             <div className={`px-3 py-1.5 rounded-full text-[8px] font-black ${
               gpsStatus === "success" ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'
             }`}>
@@ -227,7 +223,7 @@ function CheckoutContent() {
 
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<div className="h-screen flex items-center justify-center font-black text-xs text-gray-300 italic">Loading...</div>}>
+    <Suspense fallback={<div className="h-screen flex items-center justify-center font-black text-xs text-gray-900 italic">Loading...</div>}>
       <CheckoutContent />
     </Suspense>
   );

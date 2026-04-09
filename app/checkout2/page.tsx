@@ -11,7 +11,7 @@ export default function LaundryCheckout() {
   const [prices, setPrices] = useState({ wash: 0, iron: 0, ironOnly: 0 });
   const [whatsappNumber, setWhatsappNumber] = useState(""); 
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); 
   const [userId, setUserId] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState(""); 
@@ -22,9 +22,6 @@ export default function LaundryCheckout() {
 
   const [pieces, setPieces] = useState(12); 
   const [serviceType, setServiceType] = useState("wash_only");
-
-  // دالة مخرج الطوارئ للعودة للرئيسية
-  const goToHome = () => router.replace("/");
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -57,8 +54,7 @@ export default function LaundryCheckout() {
           );
         }
       } else {
-        // توجيه لصفحة تسجيل الدخول مع حفظ مسار المغسلة للعودة إليه
-        router.push(`/login?redirect=${encodeURIComponent(window.location.href)}`);
+        router.push("/login");
       }
     });
 
@@ -105,12 +101,8 @@ export default function LaundryCheckout() {
         isRated: false,
         createdAt: serverTimestamp(),
       });
-      
       alert("🚀 تم إرسال طلبك بنجاح!");
-      
-      // التعديل: التوجيه لصفحة "طلباتي" مع مسح التاريخ لمنع العودة لصفحة الطلب أو اللوجن
-      router.replace("/my-chekout"); 
-      
+      router.push("/");
     } catch (e) { 
       alert("❌ حدث خطأ أثناء الإرسال، يرجى المحاولة لاحقاً"); 
       setIsSubmitting(false);
@@ -126,30 +118,20 @@ export default function LaundryCheckout() {
   return (
     <div className="min-h-screen bg-white p-6 pb-56 text-right font-sans relative" dir="rtl">
       
-      {/* هيدر جديد بأزرار تحكم واضحة لضمان عدم الحصار */}
-      <div className="flex justify-between items-center mb-6 pt-4">
-         <button onClick={() => router.back()} className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center text-blue-900 shadow-sm">
-           →
-         </button>
-         <button onClick={goToHome} className="px-4 py-2 bg-blue-50 text-blue-900 rounded-full text-[10px] font-black italic shadow-sm border border-blue-100">
-           الرئيسية 🏠
-         </button>
+      {/* زر الرئيسية في الأعلى */}
+      <div className="flex justify-between items-center mb-4">
+        <div className="h-1 w-10 bg-blue-600 rounded-full"></div>
+        <button 
+          onClick={() => router.push("/")}
+          className="bg-blue-50 text-blue-900 px-4 py-2 rounded-full text-[10px] font-black italic shadow-sm border border-blue-100 active:scale-90 transition-transform"
+        >
+          الرئيسية 🏠
+        </button>
       </div>
 
-      {whatsappNumber && (
-        <a 
-          href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`} 
-          target="_blank"
-          rel="noopener noreferrer"
-          className="fixed bottom-36 left-6 z-[999] bg-green-500 text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-bounce hover:scale-105 transition-all border-2 border-white"
-        >
-          <span className="text-[10px] font-black italic">استفسار سريع 💬</span>
-        </a>
-      )}
-
+      
       <div className="mb-8">
-        <h1 className="text-2xl font-black text-blue-900 italic">تأكيد طلب الغسيل 🧺</h1>
-        <div className="h-1 w-10 bg-blue-600 rounded-full mt-1"></div>
+        <h1 className="text-2xl font-black text-blue-900 italic">تأكيد الطلب 🧺</h1>
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-8">
@@ -162,7 +144,7 @@ export default function LaundryCheckout() {
             key={item.id}
             disabled={isSubmitting}
             onClick={() => setServiceType(item.id)}
-            className={`p-3 rounded-[25px] border-2 transition-all duration-300 ${serviceType === item.id ? "border-blue-600 bg-blue-50 shadow-md" : "border-gray-50 text-gray-400 opacity-60"}`}
+            className={`p-3 rounded-[25px] border-2 transition-all duration-300 ${serviceType === item.id ? "border-blue-600 bg-blue-50 shadow-md" : "border-gray-50 text-gray-900 opacity-60"}`}
           >
             <p className="text-[8px] font-black mb-1">{item.label}</p>
             <p className="text-[11px] font-black text-blue-900">{item.p} <span className="text-[7px]">ج.س</span></p>
@@ -189,13 +171,13 @@ export default function LaundryCheckout() {
 
         <div className="space-y-4 pt-4">
           <div className="bg-gray-50 p-4 rounded-[25px] border border-gray-100">
-            <label className="text-[9px] font-black text-gray-400 mr-2 block mb-1 uppercase">رقم الهاتف</label>
-            <input disabled={isSubmitting} type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="w-full bg-transparent text-sm font-black outline-none" placeholder="0XXXXXXXXX" />
+            <label className="text-[9px] font-black text-gray-900 mr-2 block mb-1 uppercase">رقم الهاتف</label>
+            <input disabled={isSubmitting} type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="w-full bg-transparent text-sm font-black outline-none placeholder:text-gray-900" placeholder="0XXXXXXXXX" />
           </div>
 
           <div className="bg-gray-50 p-4 rounded-[25px] border border-gray-100">
-            <label className="text-[9px] font-black text-gray-400 mr-2 block mb-1 uppercase">العنوان بالتفصيل</label>
-            <textarea disabled={isSubmitting} value={addressDescription} onChange={(e) => setAddressDescription(e.target.value)} rows={2} className="w-full bg-transparent text-sm font-black outline-none resize-none" placeholder="المنطقة، الشارع، علامة مميزة..." />
+            <label className="text-[9px] font-black text-gray-900 mr-2 block mb-1 uppercase">العنوان بالتفصيل</label>
+            <textarea disabled={isSubmitting} value={addressDescription} onChange={(e) => setAddressDescription(e.target.value)} rows={2} className="w-full bg-transparent text-sm font-black outline-none resize-none placeholder:text-gray-900" placeholder="المنطقة، الشارع، علامة مميزة..." />
           </div>
         </div>
       </div>
@@ -203,7 +185,7 @@ export default function LaundryCheckout() {
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t rounded-t-[45px] shadow-[0_-15px_50px_rgba(0,0,0,0.12)] z-[1000]">
         <div className="max-w-md mx-auto">
           <div className="flex justify-between items-center mb-1">
-             <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">المبلغ الإجمالي</p>
+             <p className="text-[9px] text-gray-900 font-black uppercase tracking-widest">المبلغ الإجمالي</p>
              <p className="text-[9px] text-red-500 font-black italic">* لا يشمل رسوم التوصيل</p>
           </div>
           <div className="flex justify-between items-center">
@@ -211,7 +193,7 @@ export default function LaundryCheckout() {
             <button 
               disabled={isSubmitting} 
               onClick={handleSubmitOrder} 
-              className={`${isSubmitting ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 active:scale-95 shadow-xl'} text-white px-10 py-5 rounded-[25px] font-black text-xs transition-all flex items-center gap-2`}
+              className={`${isSubmitting ? 'bg-gray-900 cursor-not-allowed' : 'bg-blue-600 active:scale-95 shadow-xl'} text-white px-10 py-5 rounded-[25px] font-black text-xs transition-all flex items-center gap-2`}
             >
               {isSubmitting ? (
                 <>
