@@ -5,12 +5,12 @@ import {
   signInWithEmailAndPassword, 
   GoogleAuthProvider, 
   signInWithPopup, 
-  sendPasswordResetEmail 
+  sendPasswordResetEmail,
+  onAuthStateChanged 
 } from "firebase/auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-// إجبار الصفحة على العمل بشكل ديناميكي لتجنب أخطاء البناء (Prerendering)
 export const dynamic = "force-dynamic";
 
 function LoginContent() {
@@ -18,11 +18,26 @@ function LoginContent() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true); // حالة للتأكد من حالة المستخدم أولاً
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const redirectTo = searchParams.get("redirect") || "/";
   const googleIconUrl = "https://cdn-icons-png.flaticon.com/512/2991/2991148.png";
+
+  // --- التعديل الجديد: التحقق من الدخول عند فتح الصفحة ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // إذا كان المستخدم مسجلاً، انقله فوراً للصفحة المطلوبة أو الرئيسية
+        router.replace(decodeURIComponent(redirectTo));
+      } else {
+        // إذا لم يكن مسجلاً، اسمح بعرض محتوى صفحة تسجيل الدخول
+        setCheckingAuth(false);
+      }
+    });
+    return () => unsubscribe();
+  }, [router, redirectTo]);
 
   const handleAuthSuccess = () => {
     router.push(decodeURIComponent(redirectTo));
@@ -66,8 +81,18 @@ function LoginContent() {
     }
   };
 
+  // إذا كان النظام لا يزال يتأكد من حالة المستخدم، نعرض شاشة تحميل بسيطة
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white flex flex-col items-center p-6 text-right font-sans" dir="rtl">
+      {/* ... باقي كود التصميم الخاص بك كما هو بدون تغيير ... */}
       <div className="mt-12 mb-10 flex flex-col items-center">
         <img 
           src="/icon.png" 
@@ -161,7 +186,7 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">جاري التحميل...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-blue-600 font-bold">جاري التحميل...</div>}>
       <LoginContent />
     </Suspense>
   );

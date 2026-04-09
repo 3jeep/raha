@@ -11,7 +11,7 @@ export default function LaundryCheckout() {
   const [prices, setPrices] = useState({ wash: 0, iron: 0, ironOnly: 0 });
   const [whatsappNumber, setWhatsappNumber] = useState(""); 
   const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false); // حالة جديدة للتحكم في الزر
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState(""); 
@@ -22,6 +22,9 @@ export default function LaundryCheckout() {
 
   const [pieces, setPieces] = useState(12); 
   const [serviceType, setServiceType] = useState("wash_only");
+
+  // دالة مخرج الطوارئ للعودة للرئيسية
+  const goToHome = () => router.replace("/");
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -54,7 +57,8 @@ export default function LaundryCheckout() {
           );
         }
       } else {
-        router.push("/login");
+        // توجيه لصفحة تسجيل الدخول مع حفظ مسار المغسلة للعودة إليه
+        router.push(`/login?redirect=${encodeURIComponent(window.location.href)}`);
       }
     });
 
@@ -80,14 +84,11 @@ export default function LaundryCheckout() {
   );
 
   const handleSubmitOrder = async () => {
-    // التحقق الأساسي
     if (pieces < 12) return alert("عذراً، أقل عدد للطلب هو 12 قطعة");
     if (!addressDescription.trim() || !contactPhone.trim()) return alert("يرجى إكمال بيانات التواصل");
     
-    // منع الضغط المتكرر إذا كان الإرسال قيد التنفيذ
     if (isSubmitting) return;
-
-    setIsSubmitting(true); // تجميد الزر فوراً
+    setIsSubmitting(true);
 
     try {
       await addDoc(collection(db, "laundry_orders"), {
@@ -104,11 +105,15 @@ export default function LaundryCheckout() {
         isRated: false,
         createdAt: serverTimestamp(),
       });
+      
       alert("🚀 تم إرسال طلبك بنجاح!");
-      router.push("/");
+      
+      // التعديل: التوجيه لصفحة "طلباتي" مع مسح التاريخ لمنع العودة لصفحة الطلب أو اللوجن
+      router.replace("/my-chekout"); 
+      
     } catch (e) { 
       alert("❌ حدث خطأ أثناء الإرسال، يرجى المحاولة لاحقاً"); 
-      setIsSubmitting(false); // فك التجميد فقط في حال فشل الإرسال ليتمكن من المحاولة ثانية
+      setIsSubmitting(false);
     }
   };
 
@@ -121,6 +126,16 @@ export default function LaundryCheckout() {
   return (
     <div className="min-h-screen bg-white p-6 pb-56 text-right font-sans relative" dir="rtl">
       
+      {/* هيدر جديد بأزرار تحكم واضحة لضمان عدم الحصار */}
+      <div className="flex justify-between items-center mb-6 pt-4">
+         <button onClick={() => router.back()} className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center text-blue-900 shadow-sm">
+           →
+         </button>
+         <button onClick={goToHome} className="px-4 py-2 bg-blue-50 text-blue-900 rounded-full text-[10px] font-black italic shadow-sm border border-blue-100">
+           الرئيسية 🏠
+         </button>
+      </div>
+
       {whatsappNumber && (
         <a 
           href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`} 
@@ -128,12 +143,12 @@ export default function LaundryCheckout() {
           rel="noopener noreferrer"
           className="fixed bottom-36 left-6 z-[999] bg-green-500 text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-2 animate-bounce hover:scale-105 transition-all border-2 border-white"
         >
-          <span className="text-[10px] font-black italic">لا تتردد اضغط للاستفسار 💬</span>
+          <span className="text-[10px] font-black italic">استفسار سريع 💬</span>
         </a>
       )}
 
       <div className="mb-8">
-        <h1 className="text-2xl font-black text-blue-900 italic">تأكيد الطلب 🧺</h1>
+        <h1 className="text-2xl font-black text-blue-900 italic">تأكيد طلب الغسيل 🧺</h1>
         <div className="h-1 w-10 bg-blue-600 rounded-full mt-1"></div>
       </div>
 
@@ -145,7 +160,7 @@ export default function LaundryCheckout() {
         ].map((item) => (
           <button 
             key={item.id}
-            disabled={isSubmitting} // منع تغيير الخدمة أثناء الإرسال
+            disabled={isSubmitting}
             onClick={() => setServiceType(item.id)}
             className={`p-3 rounded-[25px] border-2 transition-all duration-300 ${serviceType === item.id ? "border-blue-600 bg-blue-50 shadow-md" : "border-gray-50 text-gray-400 opacity-60"}`}
           >
