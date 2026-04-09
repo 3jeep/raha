@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { auth } from "@/lib/firebase";
 import { 
   signInWithEmailAndPassword, 
@@ -10,7 +10,10 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function LoginPage() {
+// إجبار الصفحة على العمل بشكل ديناميكي لتجنب أخطاء البناء (Prerendering)
+export const dynamic = "force-dynamic";
+
+function LoginContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -18,19 +21,13 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // استخراج رابط العودة (مثلاً: /checkout?pkgName=...)
-  // إذا لم يوجد، القيمة الافتراضية هي الصفحة الرئيسية "/"
   const redirectTo = searchParams.get("redirect") || "/";
-
   const googleIconUrl = "https://cdn-icons-png.flaticon.com/512/2991/2991148.png";
 
-  // دالة موحدة للتوجيه بعد النجاح
   const handleAuthSuccess = () => {
-    // نقوم بفك تشفير الرابط لضمان عمل الرموز مثل & و = بشكل صحيح
     router.push(decodeURIComponent(redirectTo));
   };
 
-  // 1. تسجيل الدخول بجوجل
   const handleGoogleLogin = async () => {
     const provider = new GoogleAuthProvider();
     try {
@@ -43,7 +40,6 @@ export default function LoginPage() {
     }
   };
 
-  // 2. تسجيل الدخول اليدوي
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -57,7 +53,6 @@ export default function LoginPage() {
     }
   };
 
-  // 3. استعادة كلمة المرور
   const handleForgotPassword = async () => {
     if (!email) {
       alert("الرجاء إدخال بريدك الإلكتروني أولاً في الحقل المخصص.");
@@ -73,7 +68,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center p-6 text-right font-sans" dir="rtl">
-      
       <div className="mt-12 mb-10 flex flex-col items-center">
         <img 
           src="/icon.png" 
@@ -85,7 +79,6 @@ export default function LoginPage() {
         <p className="text-gray-400 text-sm mt-1 font-medium text-center">أهلاً بك مجدداً في منصة راحة</p>
       </div>
 
-      {/* تسجيل الدخول بجوجل */}
       <div className="w-full max-w-sm mb-8">
         <button 
           onClick={handleGoogleLogin}
@@ -155,7 +148,6 @@ export default function LoginPage() {
 
       <p className="mt-auto mb-6 text-sm text-gray-500 text-center">
         ليس لديك حساب؟ 
-        {/* نمرر رابط الـ redirect أيضاً لصفحة الاشتراك لضمان استمرار السلسلة */}
         <Link 
           href={`/register?redirect=${encodeURIComponent(redirectTo)}`} 
           className="text-blue-600 font-black hover:underline mr-1"
@@ -164,5 +156,13 @@ export default function LoginPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">جاري التحميل...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
