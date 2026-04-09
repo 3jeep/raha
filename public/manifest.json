@@ -1,0 +1,45 @@
+{
+  "name": "راحة للموارد البشرية - RaHa",
+  "short_name": "راحة",
+  "description": "تطبيق راحة للخدمات المنزلية والنظافة الاحترافية",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#1E293B",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "طلب غسيل دليفري",
+      "url": "/checkout2",
+      "description": "طلب خدمة غسيل الملابس واستلامها من المنزل",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "الباقات والعروض",
+      "url": "/packages",
+      "description": "تصفح الباقات الجديدة ",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "طلباتي",
+      "url": "/my-chekout",
+      "description": "متابعة حالة طلباتك الحالية",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
