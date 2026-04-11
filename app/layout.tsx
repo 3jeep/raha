@@ -1,12 +1,13 @@
 import "./globals.css";
-import { Metadata, Viewport } from "next"; // أضفنا Viewport
+import { Metadata, Viewport } from "next";
 import FloatingWhatsApp from "@/components/FloatingWhatsApp";
+import InstallPWA from "@/components/InstallPWA"; // تأكد من إنشاء هذا الملف في مجلد components
 
-// 1. إعدادات الـ Metadata لدعم التطبيق
+// 1. إعدادات الـ Metadata
 export const metadata: Metadata = {
   title: "RaHa - راحة",
   description: "تطبيق راحة للخدمات المنزلية المتميزة",
-  manifest: "/manifest.json", // ربط ملف المانيفست
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   },
 };
 
-// 2. إعدادات الشاشة (Viewport) لضمان عدم تغير الحجم عند الكتابة
+// 2. إعدادات الشاشة (Viewport)
 export const viewport: Viewport = {
   themeColor: "#1E293B",
   width: "device-width",
@@ -34,12 +35,14 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl">
       <head>
-        {/* وسوم إضافية لضمان عمل الأيقونة على هواتف آيفون */}
         <link rel="apple-touch-icon" href="/icon.png" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="bg-[#F8FAFC] font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
         
+        {/* سيظهر البانر هنا في أعلى كل الصفحات */}
+        <InstallPWA />
+
         <main className="min-h-screen relative overflow-x-hidden">
           {children}
         </main>

@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect, Suspense, useRef } from "react";
 import { db, auth } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore";
+import { 
+  collection, addDoc, serverTimestamp, doc, getDoc, getDocs, query, where, onSnapshot 
+} from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -10,7 +12,7 @@ function CheckoutContent() {
   const searchParams = useSearchParams();
   const isInitialMount = useRef(false);
 
-  // جلب البيانات من الرابط (بما في ذلك الوصف)
+  // جلب البيانات من الرابط
   const pkgName = searchParams.get("pkgName");
   const pkgPrice = searchParams.get("pkgPrice");
   const pkgCategory = searchParams.get("category") || "single";
@@ -25,6 +27,11 @@ function CheckoutContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [gpsStatus, setGpsStatus] = useState<"idle" | "requesting" | "success" | "error">("idle");
   
+  // حالات جديدة للتحقق من التوفر
+  const [isDayFull, setIsDayFull] = useState(false);
+  const [totalMaidsCount, setTotalMaidsCount] = useState(0);
+  const [adminFullDays, setAdminFullDays] = useState<string[]>([]); // أيام الإغلاق اليدوي
+
   const [formData, setFormData] = useState({
     fullName: "",
     phone: "",
@@ -40,18 +47,27 @@ function CheckoutContent() {
 
   const goToHome = () => router.replace("/");
 
+  // 1. جلب بيانات المستخدم وعدد العاملات الكلي + الأيام المغلقة من المدير
   useEffect(() => {
-    if (!pkgName || !pkgPrice) {
-      router.replace("/"); 
-      return;
-    }
+    const fetchData = async () => {
+      // جلب عدد العاملات
+      const maidsSnap = await getDocs(collection(db, "maids"));
+      setTotalMaidsCount(maidsSnap.size);
+    };
+    fetchData();
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    // جلب الأيام التي أغلقها المدير يدوياً
+    const unsubAdminDays = onSnapshot(doc(db, "settings", "availability"), (docSnap) => {
+      if (docSnap.exists()) {
+        setAdminFullDays(docSnap.data().fullDays || []);
+      }
+    });
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
         router.push(`/login?redirect=${encodeURIComponent(window.location.href)}`);
         return;
       }
-
       setUser(currentUser);
 
       if (!isInitialMount.current) {
@@ -64,12 +80,10 @@ function CheckoutContent() {
               ...prev,
               fullName: data.fullName || "",
               phone: data.phone || "",
-              locationText: data.address || ""
+              locationText: data.address || data.locationText || ""
             }));
           }
-        } catch (err) {
-          console.error("Firestore Fetch Error:", err);
-        }
+        } catch (err) { console.error(err); }
 
         if (navigator.geolocation) {
           setGpsStatus("requesting");
@@ -81,9 +95,7 @@ function CheckoutContent() {
               }));
               setGpsStatus("success");
             },
-            (err) => {
-              setGpsStatus("error");
-            },
+            () => setGpsStatus("error"),
             { enableHighAccuracy: true, timeout: 15000 }
           );
         }
@@ -91,15 +103,42 @@ function CheckoutContent() {
       }
     });
 
-    return () => unsubscribe();
+    return () => { unsubscribeAuth(); unsubAdminDays(); };
   }, [pkgName, pkgPrice, router]);
+
+  // 2. دالة التحقق من توفر التاريخ المختار (تلقائي + يدوي)
+  useEffect(() => {
+    const checkAvailability = async () => {
+      if (formData.startDate) {
+        // أولاً: التحقق إذا كان التاريخ مغلق يدوياً من المدير
+        if (adminFullDays.includes(formData.startDate)) {
+          setIsDayFull(true);
+          return;
+        }
+
+        // ثانياً: التحقق التلقائي بناءً على عدد الحجوزات
+        if (totalMaidsCount > 0) {
+          const q = query(
+            collection(db, "bookings"),
+            where("startDate", "==", formData.startDate),
+            where("status", "!=", "cancelled")
+          );
+          const querySnapshot = await getDocs(q);
+          setIsDayFull(querySnapshot.size >= totalMaidsCount);
+        } else {
+          setIsDayFull(false);
+        }
+      }
+    };
+    checkAvailability();
+  }, [formData.startDate, totalMaidsCount, adminFullDays]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || isDayFull) return;
 
-    if (!formData.phone || !formData.fullName || !formData.startDate) {
-      return alert("⚠️ يرجى إكمال البيانات الأساسية");
+    if (!formData.phone || !formData.fullName || !formData.startDate || !formData.locationText) {
+      return alert("⚠️ يرجى إكمال كافة البيانات");
     }
 
     setIsSubmitting(true);
@@ -108,6 +147,7 @@ function CheckoutContent() {
       await addDoc(collection(db, "bookings"), {
         ...formData,
         userId: user.uid,
+        email: user.email, 
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         totalHours: Number(pkgHours),
@@ -117,7 +157,7 @@ function CheckoutContent() {
       alert("✅ تم إرسال طلبك بنجاح!");
       router.replace("/my-chekout");
     } catch (err) {
-      console.error("Submission Error:", err);
+      console.error(err);
       alert("❌ حدث خطأ، يرجى المحاولة لاحقاً");
       setIsSubmitting(false);
     }
@@ -136,11 +176,7 @@ function CheckoutContent() {
         <img src={pkgImage} className="absolute inset-0 w-full h-full object-cover" alt="Header" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#1E293B] via-[#1E293B]/80 to-transparent"></div>
 
-        <button 
-          type="button" 
-          onClick={goToHome} 
-          className="absolute top-10 left-6 px-4 h-9 bg-white/10 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white text-[10px] font-black italic z-20 transition-active active:scale-90"
-        >
+        <button type="button" onClick={goToHome} className="absolute top-10 left-6 px-4 h-9 bg-white/10 backdrop-blur-md border border-white/20 rounded-full flex items-center justify-center text-white text-[10px] font-black z-20 active:scale-90">
           الرئيسية 🏠
         </button>
 
@@ -149,27 +185,18 @@ function CheckoutContent() {
                 <h1 className="text-3xl font-black text-white italic">{pkgPrice}</h1>
                 <span className="text-[9px] font-bold text-blue-300">ج.س</span>
             </div>
-            <h2 className="text-md font-black text-white italic drop-shadow-md">{pkgName}</h2>
-            
+            <h2 className="text-md font-black text-white italic">{pkgName}</h2>
             <div className="flex justify-center gap-2 mt-2">
-              <span className="bg-blue-500/40 backdrop-blur-md text-white text-[9px] font-black px-3 py-1.5 rounded-xl border border-white/10">
-                🕒 {pkgHours} ساعات
-              </span>
-              {pkgDuration && (
-                <span className="bg-green-500/40 backdrop-blur-md text-white text-[9px] font-black px-3 py-1.5 rounded-xl border border-white/10">
-                  📅 {pkgDuration}
-                </span>
-              )}
+              <span className="bg-blue-500/40 backdrop-blur-md text-white text-[9px] font-black px-3 py-1.5 rounded-xl border border-white/10">🕒 {pkgHours} ساعات</span>
+              {pkgDuration && <span className="bg-green-500/40 backdrop-blur-md text-white text-[9px] font-black px-3 py-1.5 rounded-xl border border-white/10">📅 {pkgDuration}</span>}
             </div>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="px-6 mt-6 space-y-4 max-w-lg mx-auto">
-        {/* عرض وصف العرض المجلوب */}
-        <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50 mb-2">
-           <p className="text-[10px] font-black text-blue-900 leading-relaxed italic">
-             {pkgDescription}
-           </p>
+        
+        <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50 mb-2 text-center">
+           <p className="text-[10px] font-black text-blue-900 leading-relaxed italic">{pkgDescription}</p>
         </div>
 
         <div className="bg-white p-5 rounded-[30px] shadow-sm border border-gray-50">
@@ -181,49 +208,54 @@ function CheckoutContent() {
         </div>
 
         <div className="bg-white p-6 rounded-[35px] shadow-sm border border-gray-50 space-y-4">
-          <input disabled={isSubmitting} required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} placeholder="الاسم الكامل" className="w-full p-4 rounded-xl bg-gray-50 text-xs font-black outline-none text-gray-900 placeholder:text-gray-600" />
-          <input disabled={isSubmitting} required type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="رقم الهاتف" className="w-full p-4 rounded-xl bg-gray-50 text-xs font-black outline-none text-gray-900 placeholder:text-gray-600 text-left" dir="ltr" />
+          <input disabled={isSubmitting} required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} placeholder="الاسم الكامل" className="w-full p-4 rounded-xl bg-gray-50 text-xs font-black outline-none" />
+          <input disabled={isSubmitting} required type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="رقم الهاتف" className="w-full p-4 rounded-xl bg-gray-50 text-xs font-black outline-none text-left" dir="ltr" />
+          
           <div className="pt-2">
             <label className="text-[10px] font-black text-blue-900 block mb-2 italic">تاريخ الموعد المطلوب:</label>
-            <input disabled={isSubmitting} required type="date" min={new Date().toISOString().split('T')[0]} value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} className="w-full p-4 rounded-xl bg-blue-50/50 text-xs font-black outline-none text-gray-900" />
+            <input 
+              disabled={isSubmitting} 
+              required 
+              type="date" 
+              min={new Date().toISOString().split('T')[0]} 
+              value={formData.startDate} 
+              onChange={e => setFormData({...formData, startDate: e.target.value})} 
+              className={`w-full p-4 rounded-xl text-xs font-black outline-none transition-all ${isDayFull ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-blue-50/50 text-gray-900'}`} 
+            />
+            {isDayFull && (
+              <p className="text-red-500 text-[8px] font-black mt-2 text-center animate-pulse">
+                ⚠️ عذراً، تم حجز كافة العاملات لهذا اليوم. يرجى اختيار تاريخ آخر.
+              </p>
+            )}
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-[35px] shadow-sm border border-gray-100 space-y-3">
           <div className="flex justify-between items-center mb-1">
             <label className="text-[10px] font-black text-gray-900 italic">العنوان والموقع:</label>
-            <div className={`px-3 py-1.5 rounded-full text-[8px] font-black ${
-              gpsStatus === "success" ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'
-            }`}>
+            <div className={`px-3 py-1.5 rounded-full text-[8px] font-black ${gpsStatus === "success" ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
                {gpsStatus === "success" ? "تم تحديد الموقع ✅" : "ادخل العنوان يدوياً 📍"}
             </div>
           </div>
-          <textarea 
-            disabled={isSubmitting} 
-            required 
-            value={formData.locationText} 
-            onChange={e => setFormData({...formData, locationText: e.target.value})} 
-            placeholder="الحي، الشارع، المعالم القريبة..." 
-            className="w-full p-4 rounded-xl bg-gray-50 text-xs font-bold outline-none h-24 resize-none leading-relaxed text-gray-900 placeholder:text-gray-600" 
-          />
+          <textarea disabled={isSubmitting} required value={formData.locationText} onChange={e => setFormData({...formData, locationText: e.target.value})} placeholder="الحي، الشارع، المعالم القريبة..." className="w-full p-4 rounded-xl bg-gray-50 text-xs font-bold outline-none h-24 resize-none leading-relaxed" />
         </div>
 
         <div className="pt-2 space-y-3">
-            <button 
-              type="submit" 
-              disabled={isSubmitting} 
-              className={`w-full py-5 rounded-[30px] font-black text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${
-                isSubmitting ? 'bg-gray-400 opacity-70' : 'bg-[#1E293B] text-white active:scale-95'
-              }`}
-            >
-                {isSubmitting ? "جاري الحفظ..." : "تأكيد حجز الخدمة 🚀"}
-            </button>
-            <button 
-              type="button" 
-              disabled={isSubmitting} 
-              onClick={goToHome} 
-              className="w-full py-4 rounded-[30px] font-black text-[10px] text-red-400 bg-red-50/30 border border-red-100 active:scale-95"
-            >
+            {!isDayFull ? (
+              <button 
+                type="submit" 
+                disabled={isSubmitting} 
+                className={`w-full py-5 rounded-[30px] font-black text-xs shadow-lg transition-all flex items-center justify-center gap-2 ${isSubmitting ? 'bg-gray-400 opacity-70' : 'bg-[#1E293B] text-white active:scale-95'}`}
+              >
+                  {isSubmitting ? "جاري الحفظ..." : "تأكيد حجز الخدمة 🚀"}
+              </button>
+            ) : (
+              <div className="w-full py-5 rounded-[30px] bg-gray-200 text-gray-500 font-black text-xs text-center border border-gray-300">
+                 جميع العاملات تم حجزهم،اختر تاريخ يوم اخر للحجز ⛔
+              </div>
+            )}
+            
+            <button type="button" disabled={isSubmitting} onClick={goToHome} className="w-full py-4 rounded-[30px] font-black text-[10px] text-red-400 bg-red-50/30 border border-red-100 active:scale-95">
               إلغاء الطلب والعودة للرئيسية
             </button>
         </div>
@@ -239,3 +271,4 @@ export default function CheckoutPage() {
     </Suspense>
   );
 }
+

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { 
-  collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, setDoc, query, orderBy 
+  collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, setDoc, query, orderBy, arrayUnion, arrayRemove 
 } from "firebase/firestore";
 
 export default function AdminControlCenter() {
@@ -15,6 +15,10 @@ export default function AdminControlCenter() {
   const [packages, setPackages] = useState<any[]>([]);
   const [laundryOrders, setLaundryOrders] = useState<any[]>([]);
   const [whatsappNumber, setWhatsappNumber] = useState("");
+  
+  // --- أيام الحجز المكتملة ---
+  const [fullDays, setFullDays] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState("");
 
   // --- أسعار الغسيل ---
   const [washPrice, setWashPrice] = useState("");
@@ -42,7 +46,7 @@ export default function AdminControlCenter() {
     duration: "1m",     
     timePeriod: "morning",
     showIn: "main",
-    minCompletedOrders: "0" // الخانة الجديدة
+    minCompletedOrders: "0"
   };
   const [pkgForm, setPkgForm] = useState(initialPkgState);
 
@@ -67,7 +71,12 @@ export default function AdminControlCenter() {
       }
     });
 
-    return () => { unsubM(); unsubV(); unsubP(); unsubL(); unsubSet(); unsubPrices(); };
+    // جلب الأيام المكتملة
+    const unsubFullDays = onSnapshot(doc(db, "settings", "availability"), (doc) => {
+      if (doc.exists()) setFullDays(doc.data().fullDays || []);
+    });
+
+    return () => { unsubM(); unsubV(); unsubP(); unsubL(); unsubSet(); unsubPrices(); unsubFullDays(); };
   }, []);
 
   // --- العمليات (Actions) ---
@@ -93,34 +102,70 @@ export default function AdminControlCenter() {
     }
   };
 
+  // دوال إدارة الأيام المكتملة
+  const addFullDay = async () => {
+    if (!selectedDate) return alert("اختر التاريخ أولاً");
+    if (fullDays.includes(selectedDate)) return alert("هذا التاريخ مضاف مسبقاً");
+    await setDoc(doc(db, "settings", "availability"), {
+      fullDays: arrayUnion(selectedDate)
+    }, { merge: true });
+    setSelectedDate("");
+  };
+
+  const removeFullDay = async (date: string) => {
+    await setDoc(doc(db, "settings", "availability"), {
+      fullDays: arrayRemove(date)
+    }, { merge: true });
+  };
+
   const openInMaps = (loc: any) => {
     if (loc && loc.lat) window.open(`https://www.google.com/maps?q=${loc.lat},${loc.lng}`, "_blank");
     else alert("الموقع الجغرافي غير متوفر");
   };
 
-  const getCurrentLocation = () => {
+  const getLocation = (type: "maid" | "vehicle") => {
     if (!navigator.geolocation) return alert("المتصفح لا يدعم GPS");
     navigator.geolocation.getCurrentPosition((position) => {
-      setMaidForm({ ...maidForm, location: { lat: position.coords.latitude, lng: position.coords.longitude } });
-      alert("✅ تم التقاط الموقع!");
-    }, () => alert("❌ فشل تحديد الموقع"));
+      const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
+      if (type === "maid") setMaidForm({ ...maidForm, location: loc });
+      else setVehicleForm({ ...vehicleForm, location: loc });
+      alert("✅ تم التقاط الموقع الجغرافي بنجاح!");
+    }, () => alert("❌ فشل تحديد الموقع، تأكد من تفعيل الـ GPS"));
   };
 
   const handleSaveMaid = async () => {
     if(!maidForm.name) return alert("الاسم مطلوب");
-    editId ? await updateDoc(doc(db, "maids", editId), maidForm) : await addDoc(collection(db, "maids"), maidForm);
+    if (editId) {
+        await updateDoc(doc(db, "maids", editId), maidForm);
+        alert("✅ تم تعديل بيانات العاملة بنجاح");
+    } else {
+        await addDoc(collection(db, "maids"), maidForm);
+        alert("✅ تم حفظ بيانات العاملة الجديدة بنجاح");
+    }
     setEditId(null); setMaidForm(initialMaidState);
   };
 
   const handleSaveVehicle = async () => {
     if(!vehicleForm.driverName) return alert("اسم السائق مطلوب");
-    editId ? await updateDoc(doc(db, "vehicles", editId), vehicleForm) : await addDoc(collection(db, "vehicles"), vehicleForm);
+    if (editId) {
+        await updateDoc(doc(db, "vehicles", editId), vehicleForm);
+        alert("✅ تم تعديل بيانات السائق بنجاح");
+    } else {
+        await addDoc(collection(db, "vehicles"), vehicleForm);
+        alert("✅ تم حفظ بيانات السائق الجديد بنجاح");
+    }
     setEditId(null); setVehicleForm(initialVehicleState);
   };
 
   const handleSavePackage = async () => {
     if(!pkgForm.name || !pkgForm.price) return alert("أكمل بيانات العرض");
-    editId ? await updateDoc(doc(db, "packages", editId), pkgForm) : await addDoc(collection(db, "packages"), pkgForm);
+    if (editId) {
+        await updateDoc(doc(db, "packages", editId), pkgForm);
+        alert("✅ تم تعديل العرض بنجاح");
+    } else {
+        await addDoc(collection(db, "packages"), pkgForm);
+        alert("✅ تم إضافة العرض الجديد بنجاح");
+    }
     setEditId(null); setPkgForm(initialPkgState);
   };
 
@@ -156,23 +201,27 @@ export default function AdminControlCenter() {
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
             <div className="bg-white p-7 rounded-[40px] shadow-sm space-y-3 border-t-4 border-blue-500">
               <h3 className="font-black text-gray-700 text-[11px] mb-2">{editId ? "📝 تعديل عاملة" : "➕ تسجيل عاملة"}</h3>
-              <input value={maidForm.name || ""} onChange={e => setMaidForm({...maidForm, name: e.target.value})} placeholder="الاسم" className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none border border-transparent focus:border-blue-100" />
+              <input value={maidForm.name || ""} onChange={e => setMaidForm({...maidForm, name: e.target.value})} placeholder="الاسم" className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" />
               <div className="grid grid-cols-2 gap-2">
                 <input value={maidForm.nationality || ""} onChange={e => setMaidForm({...maidForm, nationality: e.target.value})} placeholder="الجنسية" className="p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" />
                 <input value={maidForm.idNumber || ""} onChange={e => setMaidForm({...maidForm, idNumber: e.target.value})} placeholder="رقم الهوية" className="p-4 rounded-2xl bg-blue-50/50 text-xs font-bold outline-none border border-blue-100" />
               </div>
               <input value={maidForm.addressText || ""} onChange={e => setMaidForm({...maidForm, addressText: e.target.value})} placeholder="العنوان" className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" />
-              <button onClick={getCurrentLocation} className={`w-full py-3 rounded-2xl text-[10px] font-black border-2 border-dashed transition-all ${maidForm.location ? 'bg-green-50 border-green-200 text-green-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
-                {maidForm.location ? "📍 تم حفظ الموقع" : "📍 تحديد موقع GPS"}
+              <button onClick={() => getLocation("maid")} className={`w-full py-3 rounded-2xl text-[10px] font-black border-2 border-dashed transition-all ${maidForm.location ? 'bg-green-50 border-green-200 text-green-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                {maidForm.location ? "📍 تم حفظ موقع العاملة" : "📍 تحديد موقع GPS للعاملة"}
               </button>
               <button onClick={handleSaveMaid} className={`w-full py-4 rounded-2xl font-black text-xs shadow-lg ${editId ? 'bg-green-600' : 'bg-[#2B4C7E]'} text-white`}>
-                {editId ? "تحديث" : "حفظ"}
+                {editId ? "تحديث البيانات ✅" : "حفظ العاملة ✅"}
               </button>
             </div>
             {maids.map(m => (
               <div key={m.id} className="bg-white p-5 rounded-[30px] flex justify-between items-center shadow-sm border border-gray-50">
                 <div><p className="font-black text-xs text-gray-800">{m.name}</p><p className="text-[9px] text-blue-500 font-bold mt-1">🏠 {m.addressText}</p></div>
-                <div className="flex gap-3"><button onClick={() => { setEditId(m.id); setMaidForm({...initialMaidState, ...m}); }} className="text-blue-300">📝</button><button onClick={() => deleteItem("maids", m.id)} className="text-red-100 text-xl">×</button></div>
+                <div className="flex gap-3">
+                  <button onClick={() => openInMaps(m.location)} className="text-gray-300">📍</button>
+                  <button onClick={() => { setEditId(m.id); setMaidForm({...initialMaidState, ...m}); }} className="text-blue-300">📝</button>
+                  <button onClick={() => deleteItem("maids", m.id)} className="text-red-100 text-xl">×</button>
+                </div>
               </div>
             ))}
           </div>
@@ -181,15 +230,31 @@ export default function AdminControlCenter() {
         {activeTab === "logistics" && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
             <div className="bg-white p-7 rounded-[40px] shadow-sm space-y-3 border-t-4 border-orange-500">
+              <h3 className="font-black text-gray-700 text-[11px] mb-2">{editId ? "📝 تعديل بيانات السائق" : "➕ تسجيل سائق جديد"}</h3>
               <input value={vehicleForm.driverName || ""} onChange={e => setVehicleForm({...vehicleForm, driverName: e.target.value})} placeholder="اسم السائق" className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" />
-              <div className="grid grid-cols-2 gap-2"><input value={vehicleForm.identityNo || ""} onChange={e => setVehicleForm({...vehicleForm, identityNo: e.target.value})} placeholder="رقم العربة" className="p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" /><input value={vehicleForm.driverIdCard || ""} onChange={e => setVehicleForm({...vehicleForm, driverIdCard: e.target.value})} placeholder="هوية السائق" className="p-4 rounded-2xl bg-orange-50/50 text-xs font-bold outline-none border border-orange-100" /></div>
-              <input value={vehicleForm.region || ""} onChange={e => setVehicleForm({...vehicleForm, region: e.target.value})} placeholder="المنطقة" className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" />
-              <button onClick={handleSaveVehicle} className={`w-full py-4 rounded-2xl font-black text-xs text-white shadow-lg ${editId ? 'bg-green-600' : 'bg-orange-600'}`}>حفظ السائق</button>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={vehicleForm.driverPhone || ""} onChange={e => setVehicleForm({...vehicleForm, driverPhone: e.target.value})} placeholder="رقم الهاتف" className="p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" />
+                <input value={vehicleForm.identityNo || ""} onChange={e => setVehicleForm({...vehicleForm, identityNo: e.target.value})} placeholder="رقم العربة" className="p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <input value={vehicleForm.driverIdCard || ""} onChange={e => setVehicleForm({...vehicleForm, driverIdCard: e.target.value})} placeholder="هوية السائق" className="p-4 rounded-2xl bg-orange-50/50 text-xs font-bold outline-none border border-orange-100" />
+                <input value={vehicleForm.region || ""} onChange={e => setVehicleForm({...vehicleForm, region: e.target.value})} placeholder="المنطقة" className="p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" />
+              </div>
+              <button onClick={() => getLocation("vehicle")} className={`w-full py-3 rounded-2xl text-[10px] font-black border-2 border-dashed transition-all ${vehicleForm.location ? 'bg-green-50 border-green-200 text-green-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                {vehicleForm.location ? "📍 تم حفظ موقع السائق" : "📍 تحديد موقع GPS للسائق"}
+              </button>
+              <button onClick={handleSaveVehicle} className={`w-full py-4 rounded-2xl font-black text-xs text-white shadow-lg ${editId ? 'bg-green-600' : 'bg-orange-600'}`}>
+                {editId ? "تحديث بيانات السائق ✅" : "حفظ السائق الجديد ✅"}
+              </button>
             </div>
             {vehicles.map(v => (
               <div key={v.id} className="bg-white p-5 rounded-[30px] border-r-8 border-orange-500 shadow-sm flex justify-between items-center">
-                <div><p className="font-black text-xs text-gray-800">{v.driverName}</p><p className="text-[9px] text-orange-600 font-bold italic">🚚 {v.identityNo}</p></div>
-                <div className="flex gap-3"><button onClick={() => { setEditId(v.id); setVehicleForm({...initialVehicleState, ...v}); }} className="text-orange-300">📝</button><button onClick={() => deleteItem("vehicles", v.id)} className="text-red-100">×</button></div>
+                <div><p className="font-black text-xs text-gray-800">{v.driverName}</p><p className="text-[9px] text-orange-600 font-bold italic">🚚 {v.identityNo} | 📞 {v.driverPhone}</p></div>
+                <div className="flex gap-3">
+                  <button onClick={() => openInMaps(v.location)} className="text-gray-300">📍</button>
+                  <button onClick={() => { setEditId(v.id); setVehicleForm({...initialVehicleState, ...v}); }} className="text-orange-300">📝</button>
+                  <button onClick={() => deleteItem("vehicles", v.id)} className="text-red-100">×</button>
+                </div>
               </div>
             ))}
           </div>
@@ -200,30 +265,16 @@ export default function AdminControlCenter() {
             <div className="bg-white p-7 rounded-[40px] shadow-sm space-y-4 border-t-4 border-purple-600">
               <h3 className="font-black text-gray-700 text-[11px] mb-1">⚙️ إعداد العرض الذكي</h3>
               <div className="flex gap-2 bg-gray-100 p-1.5 rounded-2xl mb-2">
-                {[
-                  {id: "main", label: "أساسي", color: "bg-blue-600"},
-                  {id: "special", label: "خاص", color: "bg-amber-500"},
-                  {id: "hidden", label: "مخفي", color: "bg-gray-400"}
-                ].map(place => (
+                {[{id: "main", label: "أساسي", color: "bg-blue-600"}, {id: "special", label: "خاص", color: "bg-amber-500"}, {id: "hidden", label: "مخفي", color: "bg-gray-400"}].map(place => (
                   <button key={place.id} onClick={() => setPkgForm({...pkgForm, showIn: place.id})} className={`flex-1 py-3 rounded-xl text-[8px] font-black transition-all ${pkgForm.showIn === place.id ? `${place.color} text-white shadow-md scale-105` : 'bg-white text-gray-300'}`}>{place.label}</button>
                 ))}
               </div>
-
-              {/* الخانة الجديدة المدمجة */}
               <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 space-y-2">
                 <label className="text-[9px] font-black text-amber-700 block italic">🏆 يفتح بعد عدد زيارات (مكتملة):</label>
-                <input 
-                  type="number" 
-                  value={pkgForm.minCompletedOrders || "0"} 
-                  onChange={e => setPkgForm({...pkgForm, minCompletedOrders: e.target.value})} 
-                  placeholder="مثلاً: 10" 
-                  className="w-full p-3 rounded-xl bg-white text-xs font-black outline-none border border-amber-200 text-center"
-                />
-                <p className="text-[7px] text-amber-600 font-bold italic text-center">* اتركه 0 ليظهر للجميع</p>
+                <input type="number" value={pkgForm.minCompletedOrders || "0"} onChange={e => setPkgForm({...pkgForm, minCompletedOrders: e.target.value})} className="w-full p-3 rounded-xl bg-white text-xs font-black outline-none border border-amber-200 text-center" />
               </div>
-
               <input value={pkgForm.name || ""} onChange={e => setPkgForm({...pkgForm, name: e.target.value})} placeholder="اسم الباقة" className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" />
-              <textarea value={pkgForm.description || ""} onChange={e => setPkgForm({...pkgForm, description: e.target.value})} placeholder="تفاصيل ومميزات العرض..." rows={3} className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none border border-transparent focus:border-purple-100 resize-none" />
+              <textarea value={pkgForm.description || ""} onChange={e => setPkgForm({...pkgForm, description: e.target.value})} placeholder="تفاصيل ومميزات العرض..." rows={3} className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none resize-none" />
               <div className="grid grid-cols-2 gap-2">
                 <input value={pkgForm.price || ""} onChange={e => setPkgForm({...pkgForm, price: e.target.value})} placeholder="السعر" type="number" className="p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none" />
                 <input value={pkgForm.image || ""} onChange={e => setPkgForm({...pkgForm, image: e.target.value})} placeholder="رابط الصورة" className="p-4 rounded-2xl bg-purple-50 text-[9px] font-bold outline-none border border-purple-100" />
@@ -242,12 +293,12 @@ export default function AdminControlCenter() {
                 )}
                 <div className="flex items-center justify-between pt-2 border-t border-purple-100">
                     <span className="text-[10px] font-black text-purple-800 tracking-tighter">توقيت الخدمة:</span>
-                    <select value={pkgForm.timePeriod || "morning"} onChange={e => setPkgForm({...pkgPeriod, timePeriod: e.target.value})} className="w-28 p-2 rounded-xl bg-white font-black text-[10px] outline-none">
+                    <select value={pkgForm.timePeriod || "morning"} onChange={e => setPkgForm({...pkgForm, timePeriod: e.target.value})} className="w-28 p-2 rounded-xl bg-white font-black text-[10px] outline-none">
                       <option value="morning">صباحي</option><option value="evening">مسائي</option>
                     </select>
                 </div>
               </div>
-              <button onClick={handleSavePackage} className="w-full py-4 rounded-2xl font-black text-xs text-white bg-purple-600 shadow-lg active:scale-95 transition-transform">{editId ? "حفظ التعديلات ✅" : "إضافة الباقة للنظام ✅"}</button>
+              <button onClick={handleSavePackage} className="w-full py-4 rounded-2xl font-black text-xs text-white bg-purple-600 shadow-lg">{editId ? "حفظ التعديلات ✅" : "إضافة الباقة للنظام ✅"}</button>
             </div>
             {packages.map(p => (
               <div key={p.id} className="bg-white p-5 rounded-[35px] flex justify-between items-center shadow-sm border border-gray-50 transition-all hover:shadow-md">
@@ -255,9 +306,7 @@ export default function AdminControlCenter() {
                   <div className="w-12 h-12 rounded-2xl bg-gray-100 overflow-hidden border border-gray-50"><img src={p.image} className="w-full h-full object-cover" alt="Pkg" /></div>
                   <div>
                     <div className="flex items-center gap-2">
-                       <span className="p-1 px-1.5 bg-blue-50 text-[7px] font-black rounded text-blue-600 uppercase italic">
-                        {p.minCompletedOrders > 0 ? `🏆 ${p.minCompletedOrders} زيارات` : "متاح للكل"}
-                       </span>
+                       <span className="p-1 px-1.5 bg-blue-50 text-[7px] font-black rounded text-blue-600 uppercase italic">{p.minCompletedOrders > 0 ? `🏆 ${p.minCompletedOrders} زيارات` : "متاح للكل"}</span>
                        <p className="font-black text-xs text-gray-700">{p.name}</p>
                     </div>
                     <p className="text-[10px] text-purple-600 font-bold mt-1 italic">{p.price} ج.س</p>
@@ -270,21 +319,52 @@ export default function AdminControlCenter() {
         )}
 
         {activeTab === "settings" && (
-          <div className="bg-white p-8 rounded-[40px] shadow-sm border-t-4 border-green-500 space-y-8 animate-in fade-in">
-            <h3 className="font-black text-gray-800 text-sm">الإعدادات والأسعار</h3>
-            <div className="space-y-3">
-              <label className="text-[10px] font-black text-gray-400 uppercase">رقم واتساب الدعم</label>
-              <input type="text" value={whatsappNumber || ""} onChange={(e) => setWhatsappNumber(e.target.value)} placeholder="249..." className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none border border-transparent focus:border-green-200" />
+          <div className="space-y-6 animate-in fade-in">
+            <div className="bg-white p-8 rounded-[40px] shadow-sm border-t-4 border-green-500 space-y-8">
+              <h3 className="font-black text-gray-800 text-sm">الإعدادات والأسعار</h3>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase">رقم واتساب الدعم</label>
+                <input type="text" value={whatsappNumber || ""} onChange={(e) => setWhatsappNumber(e.target.value)} placeholder="249..." className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none border border-transparent focus:border-green-200" />
+              </div>
+              <div className="p-6 bg-green-50/50 rounded-[30px] border border-green-100 space-y-4">
+                <p className="text-[10px] font-black text-green-800 border-b border-green-100 pb-2">تسعيرة خدمة الغسيل دليفري (للقطعة):</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2"><label className="text-[9px] font-bold text-gray-500">سعر الغسيل فقط</label><input type="number" value={washPrice} onChange={(e) => setWashPrice(e.target.value)} className="w-full p-3 rounded-xl bg-white font-black text-xs text-center shadow-sm" placeholder="ج.س" /></div>
+                    <div className="space-y-2"><label className="text-[9px] font-bold text-gray-500">سعر مكواة فقط</label><input type="number" value={ironOnlyPrice} onChange={(e) => setIronOnlyPrice(e.target.value)} className="w-full p-3 rounded-xl bg-white font-black text-xs text-center shadow-sm" placeholder="ج.س" /></div>
+                    <div className="space-y-2"><label className="text-[9px] font-bold text-gray-500">سعر غسيل + مكواة</label><input type="number" value={ironPrice} onChange={(e) => setIronPrice(e.target.value)} className="w-full p-3 rounded-xl bg-white font-black text-xs text-center shadow-sm" placeholder="ج.س" /></div>
+                </div>
+              </div>
+              <button onClick={saveSettings} className="w-full bg-green-600 text-white py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">حفظ كافة التغييرات ✅</button>
             </div>
-            <div className="p-6 bg-green-50/50 rounded-[30px] border border-green-100 space-y-4">
-               <p className="text-[10px] font-black text-green-800 border-b border-green-100 pb-2">تسعيرة خدمة الغسيل دليفري (للقطعة):</p>
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2"><label className="text-[9px] font-bold text-gray-500">سعر الغسيل فقط</label><input type="number" value={washPrice} onChange={(e) => setWashPrice(e.target.value)} className="w-full p-3 rounded-xl bg-white font-black text-xs text-center shadow-sm" placeholder="ج.س" /></div>
-                  <div className="space-y-2"><label className="text-[9px] font-bold text-gray-500">سعر مكواة فقط</label><input type="number" value={ironOnlyPrice} onChange={(e) => setIronOnlyPrice(e.target.value)} className="w-full p-3 rounded-xl bg-white font-black text-xs text-center shadow-sm" placeholder="ج.س" /></div>
-                  <div className="space-y-2"><label className="text-[9px] font-bold text-gray-500">سعر غسيل + مكواة</label><input type="number" value={ironPrice} onChange={(e) => setIronPrice(e.target.value)} className="w-full p-3 rounded-xl bg-white font-black text-xs text-center shadow-sm" placeholder="ج.س" /></div>
-               </div>
+
+            {/* قسم إدارة التواريخ المكتملة */}
+            <div className="bg-white p-8 rounded-[40px] shadow-sm border-t-4 border-red-500 space-y-6">
+              <h3 className="font-black text-gray-800 text-sm italic">📅 إدارة الأيام المكتملة (إغلاق الحجز)</h3>
+              <div className="flex gap-2">
+                <input 
+                  type="date" 
+                  value={selectedDate} 
+                  onChange={(e) => setSelectedDate(e.target.value)} 
+                  className="flex-1 p-4 rounded-2xl bg-gray-50 text-xs font-black outline-none border border-gray-100" 
+                />
+                <button 
+                  onClick={addFullDay} 
+                  className="bg-red-600 text-white px-6 rounded-2xl font-black text-[10px] shadow-md active:scale-95"
+                >
+                  إضافة اليوم ⛔
+                </button>
+              </div>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                {fullDays.length > 0 ? fullDays.map(date => (
+                  <div key={date} className="flex justify-between items-center bg-red-50 p-4 rounded-2xl border border-red-100">
+                    <span className="text-[11px] font-black text-red-700">{date}</span>
+                    <button onClick={() => removeFullDay(date)} className="text-red-400 font-black text-xs bg-white px-3 py-1 rounded-xl shadow-sm">حذف</button>
+                  </div>
+                )) : (
+                  <p className="text-center py-4 text-[10px] text-gray-400 font-bold italic">لا توجد أيام مغلقة حالياً</p>
+                )}
+              </div>
             </div>
-            <button onClick={saveSettings} className="w-full bg-green-600 text-white py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">حفظ كافة التغييرات ✅</button>
           </div>
         )}
 

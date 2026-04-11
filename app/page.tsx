@@ -2,34 +2,85 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { db, auth } from "@/lib/firebase";
 import { 
-  collection, query, where, getDocs, doc, getDoc, limit 
+  collection, query, where, getDocs, doc, getDoc, onSnapshot, orderBy 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 
-// --- شريط التنقل السفلي ---
+// --- شريط التنقل السفلي المعدل بالألوان الذكية ---
 const BottomNav = lazy(() => Promise.resolve({ default: () => {
   const pathname = usePathname();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [activeOrdersCount, setActiveOrdersCount] = useState(0);
+  const [hasInProgress, setHasInProgress] = useState(false);
+  const [showCompletedBadge, setShowCompletedBadge] = useState(false);
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (user) setCurrentUser(user);
+    });
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const qCleaning = query(collection(db, "bookings"), where("userId", "==", currentUser.uid));
+    const qLaundry = query(collection(db, "laundry_orders"), where("userId", "==", currentUser.uid));
+
+    const unsubCleaning = onSnapshot(qCleaning, (snap1) => {
+      const cleaning = snap1.docs.map(d => d.data());
+      const unsubLaundry = onSnapshot(qLaundry, (snap2) => {
+        const laundry = snap2.docs.map(d => d.data());
+        const combined = [...cleaning, ...laundry];
+        
+        const active = combined.filter((o: any) => ["pending", "received", "in-progress"].includes(o.status));
+        const inProgress = active.some((o: any) => o.status === "in-progress");
+        const completedCount = combined.filter((o: any) => o.status === "completed").length;
+
+        setActiveOrdersCount(active.length);
+        setHasInProgress(inProgress);
+
+        if (completedCount > 0 && active.length === 0) {
+            setShowCompletedBadge(true);
+            setTimeout(() => setShowCompletedBadge(false), 8000);
+        }
+      });
+    });
+  }, [currentUser]);
+
   const navItems = [
     { name: "العروض", icon: "🏠", path: "/" },
     { name: "طلباتي", icon: "📋", path: "/my-chekout" },
     { name: "حسابي", icon: "👤", path: "/profile" },
   ];
+
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-[#1E293B] h-16 rounded-[25px] shadow-2xl flex items-center justify-around px-6 z-50 border border-white/20">
-      {navItems.map((item) => (
-        <Link 
-          key={item.path} 
-          href={item.path} 
-          className={`flex flex-col items-center transition-all ${
-            pathname === item.path ? 'scale-110 opacity-100' : 'opacity-50'
-          }`}
-        >
-          <span className="text-xl">{item.icon}</span>
-          <span className={`text-[9px] font-black text-white mt-1 uppercase`}>{item.name}</span>
-        </Link>
-      ))}
+      {navItems.map((item) => {
+        // تحديد لون وحالة العداد
+        const isOrdersPath = item.path === "/my-chekout";
+        const badgeColor = hasInProgress ? 'bg-yellow-400' : showCompletedBadge ? 'bg-green-500' : 'bg-red-500';
+        const badgeValue = showCompletedBadge ? "✓" : activeOrdersCount;
+
+        return (
+          <Link 
+            key={item.path} 
+            href={item.path} 
+            className={`flex flex-col items-center relative transition-all ${
+              pathname === item.path ? 'scale-110 opacity-100' : 'opacity-50'
+            }`}
+          >
+            {isOrdersPath && (activeOrdersCount > 0 || showCompletedBadge) && (
+              <span className={`absolute -top-1 -right-1 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-lg border border-[#1E293B] animate-pulse ${badgeColor}`}>
+                {badgeValue}
+              </span>
+            )}
+            <span className="text-xl">{item.icon}</span>
+            <span className={`text-[9px] font-black text-white mt-1 uppercase`}>{item.name}</span>
+          </Link>
+        );
+      })}
     </div>
   );
 }}));
@@ -49,7 +100,6 @@ export default function WelcomePage() {
   const [showInstallBtn, setShowInstallBtn] = useState(false);
 
   useEffect(() => {
-    // منطق التقاط حدث تثبيت التطبيق
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
@@ -258,7 +308,6 @@ export default function WelcomePage() {
         </div>
       </div>
 
-      {/* زر تثبيت التطبيق */}
       {showInstallBtn && (
         <div className="px-6 mt-10">
            <button 
