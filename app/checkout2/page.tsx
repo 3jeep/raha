@@ -4,6 +4,8 @@ import { db, auth } from "@/lib/firebase";
 import { doc, onSnapshot, collection, addDoc, serverTimestamp, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
+// استيراد الدوال المختصرة من ملفك
+import { showToast, runSafe, getCurrentGPSLocation, isValidSudanesePhone } from "@/lib/utils";
 
 export default function LaundryCheckout() {
   const router = useRouter();
@@ -36,23 +38,20 @@ export default function LaundryCheckout() {
           setAddressDescription(profileData.address || "");
         }
 
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              setLocationCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-              setLocationStatus("تم تحديد موقعك الحالي ✅");
-            },
-            () => {
-              if (profileData.latitude && profileData.longitude) {
-                setLocationCoords({ lat: profileData.latitude, lng: profileData.longitude });
-                setLocationStatus("تم استخدام موقعك المسجل 🏠");
-              } else {
-                setLocationStatus("يرجى تشغيل الـ GPS أو وصف العنوان ⚠️");
-              }
-            },
-            { enableHighAccuracy: true, timeout: 5000 }
-          );
-        }
+        // استبدال كود الـ GPS بدالتك المختصرة
+        getCurrentGPSLocation()
+          .then((coords) => {
+            setLocationCoords(coords);
+            setLocationStatus("تم تحديد موقعك الحالي ✅");
+          })
+          .catch(() => {
+            if (profileData.latitude && profileData.longitude) {
+              setLocationCoords({ lat: profileData.latitude, lng: profileData.longitude });
+              setLocationStatus("تم استخدام موقعك المسجل 🏠");
+            } else {
+              setLocationStatus("يرجى تشغيل الـ GPS أو وصف العنوان ⚠️");
+            }
+          });
       } else {
         router.push("/login");
       }
@@ -80,13 +79,19 @@ export default function LaundryCheckout() {
   );
 
   const handleSubmitOrder = async () => {
-    if (pieces < 12) return alert("عذراً، أقل عدد للطلب هو 12 قطعة");
-    if (!addressDescription.trim() || !contactPhone.trim()) return alert("يرجى إكمال بيانات التواصل");
+    // التحقق من العدد
+    if (pieces < 12) return showToast("عذراً، أقل عدد للطلب هو 12 قطعة", "info");
+    
+    // التحقق من صحة الرقم باستخدام دالتك
+    if (!isValidSudanesePhone(contactPhone)) return;
+
+    // التحقق من العنوان
+    if (!addressDescription.trim()) return showToast("⚠️ يرجى إدخال وصف العنوان", "info");
     
     if (isSubmitting) return;
-    setIsSubmitting(true);
 
-    try {
+    // استخدام runSafe لإدارة حالة الإرسال والإنترنت
+    await runSafe(setIsSubmitting, async () => {
       await addDoc(collection(db, "laundry_orders"), {
         orderNumber: Math.floor(1000 + Math.random() * 9000),
         userId,
@@ -101,14 +106,12 @@ export default function LaundryCheckout() {
         isRated: false,
         createdAt: serverTimestamp(),
       });
-      alert("🚀 تم إرسال طلبك بنجاح!");
+      showToast("🚀 تم إرسال طلبك بنجاح!");
       router.push("/");
-    } catch (e) { 
-      alert("❌ حدث خطأ أثناء الإرسال، يرجى المحاولة لاحقاً"); 
-      setIsSubmitting(false);
-    }
+    });
   };
 
+  // ... (بقية كود الـ JSX يبقى كما هو تماماً دون تغيير في التصميم)
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-white">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900"></div>

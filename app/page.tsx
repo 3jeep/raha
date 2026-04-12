@@ -172,23 +172,21 @@ export default function WelcomePage() {
     router.push(finalPath);
   };
 
-  const handleBooking = (pkg: any) => {
-    const requiredVisits = Number(pkg.minCompletedOrders || 0);
-    const isLocked = requiredVisits > completedVisitsCount;
+  // --- ابحث عن هذه الدالة وحدثها بهذا الشكل ---
+const handleBooking = (pkg: any) => {
+  const requiredVisits = Number(pkg.minCompletedOrders || 0);
+  const isLocked = requiredVisits > completedVisitsCount;
 
-    if (pkg.showIn === "special" && isLocked) return;
-    
-    const params = new URLSearchParams({
-      pkgName: pkg.name || "باقة راحة",
-      pkgPrice: pkg.price ? String(pkg.price) : "0",
-      category: pkg.category || "single", 
-      description: pkg.description || "",
-      image: pkg.image || "",
-      hours: String(pkg.totalHours || "4")
-    });
-    
-    navigateTo("/checkout", params);
-  };
+  // إذا كانت الباقة خاصة ومغلقة، لا تفعل شيئاً
+  if (pkg.showIn === "special" && isLocked) return;
+  
+  // 💡 التغيير الجوهري هنا: نرسل المعرف فقط
+  const params = new URLSearchParams({
+    id: pkg.id 
+  });
+  
+  navigateTo("/checkout", params);
+};
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-sans text-right pb-40" dir="rtl">

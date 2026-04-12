@@ -5,6 +5,8 @@ import {
   collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, serverTimestamp, where, getDocs, limit 
 } from "firebase/firestore";
 import Link from "next/link";
+// استيراد الدوال من ملف الاختصارات الخاص بك
+import { showToast, handleUpdate, handleDelete } from "@/lib/utils";
 
 const calculateDistance = (lat1: any, lon1: any, lat2: any, lon2: any) => {
   const pLat1 = parseFloat(lat1);
@@ -73,11 +75,12 @@ export default function AdminOrdersPage() {
     return s.empty ? { m: null, v: null } : { m: s.docs[0].data().assignedMaid, v: s.docs[0].data().assignedVehicle };
   };
 
+  // دالة الحفظ التلقائي باستخدام handleUpdate لإضافة updatedAt تلقائياً
   const autoSave = async (orderId: string, updates: any) => {
     try {
       const clean: any = {};
       Object.keys(updates).forEach(k => { if (updates[k] !== undefined) clean[k] = updates[k]; });
-      await updateDoc(doc(db, "bookings", orderId), clean);
+      await handleUpdate("bookings", orderId, clean);
     } catch (err) { console.error(err); }
   };
 
@@ -105,15 +108,11 @@ export default function AdminOrdersPage() {
     return () => clearInterval(t);
   }, []);
 
-  // دالة جلب الوقت المعدلة لتعمل بالتوافق مع التعديل الجديد
   const getTimer = (order: any) => {
     if (!order.actualStartedAt) return "--:--:--";
-    
-    // حساب وقت النهاية الحقيقي: وقت البداية + (عدد الساعات * 3600 ثانية)
     const startMs = order.actualStartedAt.seconds * 1000;
     const durationMs = (Number(order.totalHours || 4)) * 3600000;
     const end = startMs + durationMs;
-
     const diff = Math.max(0, Math.floor((end - now) / 1000));
     const h = Math.floor(diff / 3600);
     const m = Math.floor((diff % 3600) / 60);
@@ -153,10 +152,12 @@ export default function AdminOrdersPage() {
             <div key={b.id} className="bg-white rounded-[40px] shadow-xl p-7 border border-gray-100 relative">
               <div className="absolute top-6 left-6 flex gap-2">
                 {b.status === "in-progress" && (
-                  <button onClick={async () => confirm("إيقاف؟") && await updateDoc(doc(db,"bookings",b.id),{status:"pending",targetEndTime:null})} className="bg-orange-100 text-orange-600 p-2 rounded-xl text-[9px] font-black">🛑 إيقاف</button>
+                  <button onClick={() => handleUpdate("bookings", b.id, {status:"pending", targetEndTime:null})} className="bg-orange-100 text-orange-600 p-2 rounded-xl text-[9px] font-black">🛑 إيقاف</button>
                 )}
-                <button onClick={async () => confirm("حذف؟") && await deleteDoc(doc(db,"bookings",b.id))} className="bg-red-100 text-red-600 p-2 rounded-xl text-[9px] font-black">🗑️ حذف</button>
+                {/* استخدام handleDelete التي تطلب تأكيد الحذف تلقائياً */}
+                <button onClick={() => handleDelete("bookings", b.id)} className="bg-red-100 text-red-600 p-2 rounded-xl text-[9px] font-black">🗑️ حذف</button>
               </div>
+              
               <div className="mb-6">
                 <h4 className="font-black text-xl text-gray-800 ml-20">{b.fullName}</h4>
                 <div className="flex gap-2 mt-2">
@@ -164,10 +165,12 @@ export default function AdminOrdersPage() {
                   <a href={`tel:${b.phone}`} className="text-green-600 font-black text-[10px] self-center">📞 {b.phone}</a>
                 </div>
               </div>
+
               <div className="bg-gray-50 rounded-3xl p-4 mb-6 border border-gray-100">
                 <p className="text-[10px] font-black text-gray-600 mb-2">📍 {b.locationText || b.address}</p>
                 {cLat && <a href={`https://www.google.com/maps?q=${cLat},${cLng}`} target="_blank" rel="noreferrer" className="text-[9px] text-blue-500 font-black underline">فتح موقع العميل 🗺️</a>}
               </div>
+
               <div className="grid grid-cols-2 gap-3 mb-6">
                 <div className="space-y-1">
                   <div className="flex justify-between items-center px-1">
@@ -190,9 +193,9 @@ export default function AdminOrdersPage() {
                   </select>
                 </div>
               </div>
+
               {b.status === "in-progress" ? (
                 <div className="bg-[#1E293B] rounded-[30px] p-6 text-center text-white">
-                  {/* إخفاء العداد في حالة الباقة الشهرية monthly */}
                   {b.category !== 'monthly' ? (
                     <div className="text-3xl font-black mb-4 font-mono">{getTimer(b)}</div>
                   ) : (
@@ -201,7 +204,20 @@ export default function AdminOrdersPage() {
                   <button onClick={() => { setSelectedOrder(b); setShowModal(true); }} className="w-full bg-green-600 py-4 rounded-2xl font-black text-xs shadow-lg">إنهاء المهمة ✅</button>
                 </div>
               ) : (
-                <button onClick={async () => { const m = b.assignedMaid || b.suggestedMaid; const v = b.assignedVehicle || b.suggestedVehicle; if(!m || !v) return alert("يرجى التعيين أولاً"); const h = b.packageName?.includes("4") ? 4 : 8; await updateDoc(doc(db,"bookings",b.id), { status: "in-progress", targetEndTime: Date.now() + (h*3600000), assignedMaid: m, assignedVehicle: v, actualStartedAt: serverTimestamp() }); }} className="w-full bg-[#1E293B] text-white py-5 rounded-3xl font-black text-xs">تـسـجـيـل الـبـدء 🚀</button>
+                <button onClick={async () => { 
+                  const m = b.assignedMaid || b.suggestedMaid; 
+                  const v = b.assignedVehicle || b.suggestedVehicle; 
+                  if(!m || !v) return showToast("يرجى التعيين أولاً", "error"); 
+                  const h = b.packageName?.includes("4") ? 4 : 8; 
+                  await handleUpdate("bookings", b.id, { 
+                    status: "in-progress", 
+                    targetEndTime: Date.now() + (h*3600000), 
+                    assignedMaid: m, 
+                    assignedVehicle: v, 
+                    actualStartedAt: serverTimestamp() 
+                  });
+                  showToast("تم بدء المهمة بنجاح", "success");
+                }} className="w-full bg-[#1E293B] text-white py-5 rounded-3xl font-black text-xs">تـسـجـيـل الـبـدء 🚀</button>
               )}
             </div>
           );
@@ -232,8 +248,13 @@ export default function AdminOrdersPage() {
             </div>
             <button 
               onClick={async () => {
-                if(!rating) return alert("التقييم مطلوب");
-                await updateDoc(doc(db,"bookings",selectedOrder.id), { status: "completed", workerRating: rating, signature: canvasRef.current?.toDataURL(), actualFinishedAt: serverTimestamp() });
+                if(!rating) return showToast("التقييم مطلوب", "error");
+                await handleUpdate("bookings", selectedOrder.id, { 
+                  status: "completed", 
+                  workerRating: rating, 
+                  signature: canvasRef.current?.toDataURL(), 
+                  actualFinishedAt: serverTimestamp() 
+                });
                 setShowModal(false);
               }}
               className="w-full bg-[#1E293B] text-white py-5 rounded-3xl font-black text-lg"
