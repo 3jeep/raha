@@ -5,11 +5,12 @@ import {
   GoogleAuthProvider, 
   signInWithPopup, 
   signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
-  fetchSignInMethodsForEmail // لاستطلاع طرق تسجيل الدخول
+  createUserWithEmailAndPassword
 } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { useRouter } from "next/navigation";
+// استيراد الـ Toast
+import { showToast } from "@/lib/utils";
 
 function AuthContent() {
   const [isLogin, setIsLogin] = useState(true);
@@ -39,13 +40,17 @@ function AuthContent() {
           uid: result.user.uid, 
           fullName: result.user.displayName, 
           phone: "", 
-          email: result.user.email, // حفظ الإيميل للتحقق لاحقاً
+          email: result.user.email,
           role: "user", 
           createdAt: serverTimestamp() 
         });
       }
+      showToast("تم تسجيل الدخول بنجاح! 🌈", "success");
       router.push("/");
-    } catch (error) { setErrorMessage("فشل تسجيل الدخول عبر جوجل."); }
+    } catch (error) { 
+      setErrorMessage("فشل تسجيل الدخول عبر جوجل.");
+      showToast("خطأ في الاتصال بجوجل", "error");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,49 +62,50 @@ function AuthContent() {
 
     try {
       if (isLogin) {
-        // --- منطق التحقق الذكي ---
         const usersRef = collection(db, "users");
         const q = query(usersRef, where("phone", "==", formattedPhone));
         const querySnapshot = await getDocs(q);
 
         if (!querySnapshot.empty) {
           const userData = querySnapshot.docs[0].data();
-          // إذا كان المستخدم مسجل بإيميل جوجل وليس ايميل راحة
           if (userData.email && !userData.email.endsWith("@raha.sd")) {
-            setErrorMessage("هذا الرقم مرتبط بحساب Google. يرجى تسجيل الدخول عبر Google.");
+            const msg = "هذا الرقم مرتبط بحساب Google. يرجى تسجيل الدخول عبر Google.";
+            setErrorMessage(msg);
+            showToast(msg, "error");
             setLoading(false);
             return;
           }
         }
         
-        // إذا لم يكن مرتبطاً بجوجل، أكمل الدخول العادي
         await signInWithEmailAndPassword(auth, fakeEmail, INTERNAL_PASSWORD);
+        showToast("مرحباً بك مجدداً! 🚀", "success");
         router.push("/");
       } else {
-        // إنشاء حساب جديد
         const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, INTERNAL_PASSWORD);
         await setDoc(doc(db, "users", userCredential.user.uid), {
           uid: userCredential.user.uid,
           fullName,
           phone: formattedPhone,
-          email: fakeEmail, // تمييزه بأنه حساب رقم هاتف
+          email: fakeEmail,
           role: "user",
           createdAt: serverTimestamp()
         });
+        showToast("تم إنشاء حسابك بنجاح ✨", "success");
         router.push("/");
       }
     } catch (error: any) {
+      let msg = "حدث خطأ، يرجى المحاولة لاحقاً.";
       if (error.code === "auth/invalid-credential" || error.code === "auth/user-not-found") 
-        setErrorMessage("الرقم غير مسجل. اضغط على 'إنشاء حساب جديد'.");
-      else 
-        setErrorMessage("حدث خطأ، يرجى المحاولة لاحقاً.");
+        msg = "الرقم غير مسجل. اضغط على 'إنشاء حساب جديد'.";
+      
+      setErrorMessage(msg);
+      showToast(msg, "error");
     } finally { setLoading(false); }
   };
 
   return (
     <div className="min-h-screen flex flex-col items-center p-6 bg-white font-sans" dir="rtl">
       
-      {/* 1. الشعار */}
       <div className="flex flex-col items-center mt-2 mb-6">
         <img src="/icon.png" alt="Logo" className="w-20 h-20 rounded-2xl shadow-lg" />
         <h1 className="text-xl font-black text-gray-900 mt-4 italic">
@@ -107,7 +113,6 @@ function AuthContent() {
         </h1>
       </div>
       
-      {/* 2. الفورم */}
       <div className="w-full max-w-sm">
         <form onSubmit={handleSubmit} className="space-y-4">
           {errorMessage && (
@@ -156,7 +161,6 @@ function AuthContent() {
         </button>
       </div>
 
-      {/* 4. قوقل في الأسفل */}
       <div className="w-full max-w-sm mt-auto mb-10 pt-6 border-t border-gray-200 flex flex-col items-center">
         <p className="text-[10px] font-black text-gray-400 mb-4 uppercase tracking-widest text-center">أو عبر الطرق الأخرى</p>
         <button 

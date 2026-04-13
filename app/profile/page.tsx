@@ -2,10 +2,12 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+// استيراد الـ Toast
+import { showToast } from "@/lib/utils";
 
 // استدعاء الخريطة مع تعطيل SSR
 const MapComponent = dynamic(() => import("./MapComponent"), { 
@@ -39,7 +41,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([15.5007, 32.5599]); // الخرطوم كمركز افتراضي
+  const [mapCenter, setMapCenter] = useState<[number, number]>([15.5007, 32.5599]);
   
   const [profile, setProfile] = useState({
     fullName: "",
@@ -49,10 +51,9 @@ export default function ProfilePage() {
     longitude: null as number | null
   });
 
-  // دالة جلب الموقع التلقائي
   const handleGetLocation = (isAuto = false) => {
     if (!navigator.geolocation) {
-      if (!isAuto) alert("المتصفح لا يدعم تحديد الموقع");
+      if (!isAuto) showToast("المتصفح لا يدعم تحديد الموقع", "error");
       return;
     }
 
@@ -61,11 +62,11 @@ export default function ProfilePage() {
         const { latitude, longitude } = pos.coords;
         setProfile(prev => ({ ...prev, latitude, longitude }));
         setMapCenter([latitude, longitude]);
-        if (!isAuto) alert("📍 تم تحديث موقعك بنجاح!");
+        if (!isAuto) showToast("📍 تم تحديث موقعك بنجاح!", "success");
       },
       () => {
         if (!isAuto) {
-          alert("⚠️ تعذر جلب الموقع التلقائي، الرجاء التحديد يدوياً من الخريطة");
+          showToast("⚠️ تعذر جلب الموقع تلقائياً", "error");
           setShowMapModal(true);
         }
       },
@@ -76,30 +77,37 @@ export default function ProfilePage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) {
+        setUser(null);
+        setLoading(false);
         router.push("/login");
       } else {
         setUser(currentUser);
         try {
-          const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+          // جلب البيانات فقط إذا كان هناك مستخدم
+          const userRef = doc(db, "users", currentUser.uid);
+          const userDoc = await getDoc(userRef);
+          
           if (userDoc.exists()) {
             const data = userDoc.data();
-            const storedLat = data.latitude || null;
-            const storedLng = data.longitude || null;
-
             setProfile({
               fullName: data.fullName || "",
               phone: data.phone || "",
               address: data.address || "",
-              latitude: storedLat,
-              longitude: storedLng
+              latitude: data.latitude || null,
+              longitude: data.longitude || null
             });
 
-            if (storedLat) setMapCenter([storedLat, storedLng]);
+            if (data.latitude) setMapCenter([data.latitude, data.longitude]);
             handleGetLocation(true);
           }
-        } catch (err) { console.error("Error:", err); }
+        } catch (err: any) {
+          // إسكات خطأ الصلاحيات عند تسجيل الخروج لمنع ضجيج الكونسول
+          if (err.code !== 'permission-denied') {
+            console.error("Firestore Error:", err);
+          }
+        }
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, [router]);
@@ -109,7 +117,6 @@ export default function ProfilePage() {
     if (!user) return;
     setIsSaving(true);
 
-    // --- تعديل رقم الهاتف ليتحول الصفر إلى 249 ---
     let formattedPhone = profile.phone.trim();
     if (formattedPhone.startsWith("0")) {
       formattedPhone = "249" + formattedPhone.substring(1);
@@ -118,19 +125,29 @@ export default function ProfilePage() {
     try {
       await setDoc(doc(db, "users", user.uid), {
         ...profile,
-        phone: formattedPhone, // حفظ الرقم بالصيغة الدولية
+        phone: formattedPhone,
         email: user.email,
         updatedAt: new Date()
       }, { merge: true });
       
-      // تحديث الحالة المحلية لعرض الرقم الجديد
       setProfile(prev => ({ ...prev, phone: formattedPhone }));
-      
-      alert("✅ تم الحفظ بنجاح");
+      showToast("✅ تم الحفظ بنجاح", "success");
     } catch (err) { 
-      alert("❌ فشل الحفظ"); 
+      showToast("❌ فشل الحفظ", "error"); 
     } finally { 
       setIsSaving(false); 
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      // تصفير الحالة المحلية فوراً لمنع أي عمليات جلب بيانات لاحقة
+      setUser(null);
+      await signOut(auth);
+      showToast("تم تسجيل الخروج 🚪", "info");
+      router.push("/login");
+    } catch (err) {
+      showToast("فشل تسجيل الخروج", "error");
     }
   };
 
@@ -198,7 +215,7 @@ export default function ProfilePage() {
           </button>
         </form>
 
-        <button onClick={() => auth.signOut()} className="w-full py-4 rounded-[30px] bg-red-50 text-red-600 font-black text-[11px] border border-red-100 mb-10 shadow-sm active:scale-95 transition-all">تسجيل الخروج 🚪</button>
+        <button onClick={handleLogout} className="w-full py-4 rounded-[30px] bg-red-50 text-red-600 font-black text-[11px] border border-red-100 mb-10 shadow-sm active:scale-95 transition-all">تسجيل الخروج 🚪</button>
       </div>
 
       {showMapModal && (
@@ -216,7 +233,7 @@ export default function ProfilePage() {
                 />
             </div>
             <button 
-              onClick={() => setShowMapModal(false)}
+              onClick={() => { setShowMapModal(false); showToast("تم تحديد الموقع يدوياً", "success"); }}
               className="w-full mt-6 py-5 bg-[#1E293B] text-white rounded-3xl font-black text-sm shadow-xl"
             >
               تثبيت الموقع المختار ✅
