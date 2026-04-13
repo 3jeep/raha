@@ -1,40 +1,39 @@
-/* تحسين وضوح النصوص ومنع البهتان */
-body {
-    background-color: #ffffff !important;
-    color: #1E293B !important; /* اللون الكحلي الغامق الخاص بك */
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-}
-
-/* حل مشكلة النص الباهت في وضع التطبيق (PWA) */
-@media (prefers-color-scheme: dark) {
-    body {
-        background-color: #ffffff !important; /* إجبار الخلفية على البقاء فاتحة */
-        color: #1E293B !important;
+{
+  "name": "RaHa - راحة للخدمات المنزلية",
+  "short_name": "RaHa",
+  "description": "تطبيق راحة للخدمات المنزلية المتميزة - حلول ذكية وعصرية لمنزلك",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#1E293B",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
-}
-
-/* تنسيق رسالة "تم الحفظ" البديلة للـ Alert */
-.custom-toast {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #1E293B;
-    color: #ffffff;
-    padding: 12px 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    z-index: 99999;
-    font-family: 'Arial', sans-serif;
-    direction: rtl;
-    animation: fadeInOut 3s ease-in-out forwards;
-}
-
-@keyframes fadeInOut {
-    0% { opacity: 0; bottom: 10px; }
-    15% { opacity: 1; bottom: 30px; }
-    85% { opacity: 1; bottom: 30px; }
-    100% { opacity: 0; bottom: 10px; }
+  ],
+  "categories": ["lifestyle", "utilities"],
+  "lang": "ar-SA",
+  "dir": "rtl",
+  "shortcuts": [
+    {
+      "name": "الطلبات",
+      "url": "/admin/orders",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "الملف الشخصي",
+      "url": "/profile",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
 }
