@@ -1,11 +1,10 @@
- "use client";
+"use client";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { 
   collection, onSnapshot, doc, setDoc, query, orderBy, arrayUnion, arrayRemove 
 } from "firebase/firestore";
 
-// استيراد الدوال المختصرة والمحسنة من utils.ts
 import { 
   showToast, 
   handleSave, 
@@ -22,28 +21,24 @@ export default function AdminControlCenter() {
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false); 
 
-  // --- القوائم (Lists) ---
   const [maids, setMaids] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
   const [laundryOrders, setLaundryOrders] = useState<any[]>([]);
   const [whatsappNumber, setWhatsappNumber] = useState("");
   
-  // --- إعدادات الحجز والأسعار ---
   const [fullDays, setFullDays] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState("");
   const [washPrice, setWashPrice] = useState("");
   const [ironPrice, setIronPrice] = useState("");
   const [ironOnlyPrice, setIronOnlyPrice] = useState(""); 
 
-  // --- نماذج البيانات (Forms) ---
   const initialMaidState = { name: "", nationality: "", age: "", education: "", addressText: "", idNumber: "", location: null as any };
   const [maidForm, setMaidForm] = useState(initialMaidState);
 
   const initialVehicleState = { driverName: "", driverPhone: "", region: "", identityNo: "", driverIdCard: "", location: null as any };
   const [vehicleForm, setVehicleForm] = useState(initialVehicleState);
 
-  // تم التأكد من وجود قيم افتراضية لكل الحقول لتجنب undefined
   const initialPkgState = { 
     name: "", 
     price: "", 
@@ -58,7 +53,6 @@ export default function AdminControlCenter() {
   };
   const [pkgForm, setPkgForm] = useState(initialPkgState);
 
-  // --- جلب البيانات (Real-time) ---
   useEffect(() => {
     const unsubM = onSnapshot(collection(db, "maids"), (s) => setMaids(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubV = onSnapshot(collection(db, "vehicles"), (s) => setVehicles(s.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -77,7 +71,33 @@ export default function AdminControlCenter() {
     return () => { unsubM(); unsubV(); unsubP(); unsubL(); unsubSet(); unsubPrices(); unsubFullDays(); };
   }, []);
 
-  // دالة مخصصة لملء نموذج التعديل بأمان (Sanitized Data)
+  // --- دوال "بدء التعديل" المحسنة (Sanitized Data) ---
+  
+  const startEditingMaid = (m: any) => {
+    setEditId(m.id);
+    setMaidForm({
+      name: m.name ?? "",
+      nationality: m.nationality ?? "",
+      age: m.age ?? "",
+      education: m.education ?? "",
+      addressText: m.addressText ?? "",
+      idNumber: m.idNumber ?? "",
+      location: m.location ?? null
+    });
+  };
+
+  const startEditingVehicle = (v: any) => {
+    setEditId(v.id);
+    setVehicleForm({
+      driverName: v.driverName ?? "",
+      driverPhone: v.driverPhone ?? "",
+      region: v.region ?? "",
+      identityNo: v.identityNo ?? "",
+      driverIdCard: v.driverIdCard ?? "",
+      location: v.location ?? null
+    });
+  };
+
   const startEditingPkg = (p: any) => {
     setEditId(p.id);
     setPkgForm({
@@ -102,11 +122,25 @@ export default function AdminControlCenter() {
     });
   };
 
+  // --- دوال الحفظ المحسنة لضمان عدم وجود قيم undefined ---
+
   const handleSaveMaid = async () => {
     if(!maidForm.name) return showToast("الاسم مطلوب", "error");
+    
+    // تنظيف البيانات لضمان عدم إرسال أي قيمة undefined لـ Firebase
+    const cleanMaidData = {
+      name: maidForm.name || "",
+      nationality: maidForm.nationality || "",
+      age: maidForm.age || "",
+      education: maidForm.education || "",
+      addressText: maidForm.addressText || "",
+      idNumber: maidForm.idNumber || "",
+      location: maidForm.location || null
+    };
+
     await runSafe(setLoading, async () => {
-      if (editId) await handleUpdate("maids", editId, maidForm);
-      else await handleSave("maids", maidForm);
+      if (editId) await handleUpdate("maids", editId, cleanMaidData);
+      else await handleSave("maids", cleanMaidData);
       setEditId(null); setMaidForm(initialMaidState);
     });
   };
@@ -114,9 +148,20 @@ export default function AdminControlCenter() {
   const handleSaveVehicle = async () => {
     if(!vehicleForm.driverName) return showToast("اسم السائق مطلوب", "error");
     if (vehicleForm.driverPhone && !isValidSudanesePhone(vehicleForm.driverPhone)) return;
+
+    // تنظيف البيانات
+    const cleanVehicleData = {
+      driverName: vehicleForm.driverName || "",
+      driverPhone: vehicleForm.driverPhone || "",
+      region: vehicleForm.region || "",
+      identityNo: vehicleForm.identityNo || "",
+      driverIdCard: vehicleForm.driverIdCard || "",
+      location: vehicleForm.location || null
+    };
+
     await runSafe(setLoading, async () => {
-      if (editId) await handleUpdate("vehicles", editId, vehicleForm);
-      else await handleSave("vehicles", vehicleForm);
+      if (editId) await handleUpdate("vehicles", editId, cleanVehicleData);
+      else await handleSave("vehicles", cleanVehicleData);
       setEditId(null); setVehicleForm(initialVehicleState);
     });
   };
@@ -207,7 +252,7 @@ export default function AdminControlCenter() {
                 <div><p className="font-black text-xs text-gray-800">{m.name}</p><p className="text-[9px] text-blue-500 font-bold mt-1">🏠 {m.addressText}</p></div>
                 <div className="flex gap-3">
                   <button onClick={() => openInGoogleMaps(m.location)} className="text-gray-300 transition-transform active:scale-125">📍</button>
-                  <button onClick={() => { setEditId(m.id); setMaidForm(m); }} className="text-blue-300">📝</button>
+                  <button onClick={() => startEditingMaid(m)} className="text-blue-300">📝</button>
                   <button onClick={() => handleDelete("maids", m.id)} className="text-red-100 text-xl">×</button>
                 </div>
               </div>
@@ -238,7 +283,7 @@ export default function AdminControlCenter() {
                 <div><p className="font-black text-xs text-gray-800">{v.driverName}</p><p className="text-[9px] text-orange-600 font-bold italic">🚚 {v.identityNo} | 📞 {v.driverPhone}</p></div>
                 <div className="flex gap-3">
                   <button onClick={() => openInGoogleMaps(v.location)} className="text-gray-300">📍</button>
-                  <button onClick={() => { setEditId(v.id); setVehicleForm(v); }} className="text-orange-300">📝</button>
+                  <button onClick={() => startEditingVehicle(v)} className="text-orange-300">📝</button>
                   <button onClick={() => handleDelete("vehicles", v.id)} className="text-red-100">×</button>
                 </div>
               </div>
@@ -313,8 +358,6 @@ export default function AdminControlCenter() {
             ))}
           </div>
         )}
-
-
       </div>
     </div>
   );
