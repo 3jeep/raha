@@ -1,138 +1,97 @@
 "use client";
-import React, { useState, useCallback, useRef, useMemo } from "react";
-import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
+import React, { useCallback, useRef, useMemo } from "react";
+import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 
-const containerStyle = {
-  width: "100%",
-  height: "100%",
-};
-
-// إحداثيات افتراضية لوسط الخرطوم كمرجع أولي
-const SUDAN_CENTER = { lat: 15.5007, lng: 32.5599 };
+// تعريف المكتبات خارج المكون لضمان استقرار الأداء
+const libraries: ("places" | "geometry" | "maps")[] = ["places", "geometry", "maps"];
 
 export default function MapComponent({ mapCenter, setProfile, profile }: any) {
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const [autocomplete, setAutocomplete] = useState<google.maps.places.Autocomplete | null>(null);
+  const mapRef = useRef<any>(null);
 
-  // استخدام useMemo لمنع إعادة تحميل المكتبات وتجنب خطأ الـ Loader
-  const libraries = useMemo(() => ["places"], []);
-
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: "google-map-script",
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "AIzaSyCscTfT9KnGnoGj0dR96n8YbLFk5YdW2p0",
-    libraries: libraries as any,
-    version: "weekly",
-    language: "ar",
-    region: "SD" 
+  // 1. استخدام Loader الخاص بالمكتبة لضمان التحميل الآمن
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: "AIzaSyCscTfT9KnGnoGj0dR96n8YbLFk5YdW2p0", // تأكد من استخدام مفتاحك
+    libraries,
+    language: 'ar',
+    region: 'SD',
   });
 
-  const onMapLoad = useCallback((map: google.maps.Map) => {
+  const defaultCenter = useMemo(() => ({
+    lat: profile?.latitude || (Array.isArray(mapCenter) ? mapCenter[0] : 15.5007),
+    lng: profile?.longitude || (Array.isArray(mapCenter) ? mapCenter[1] : 32.5599),
+  }), [profile?.latitude, profile?.longitude, mapCenter]);
+
+  const onMapLoad = useCallback((map: any) => {
     mapRef.current = map;
   }, []);
 
-  // وظيفة جلب الموقع الحالي وتحديث "نطاق البحث" بناءً عليه
-  const handleCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const pos = { lat: position.coords.latitude, lng: position.coords.longitude };
-          setProfile((prev: any) => ({ ...prev, latitude: pos.lat, longitude: pos.lng }));
-          mapRef.current?.panTo(pos);
-          mapRef.current?.setZoom(17);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length > 1 && mapRef.current) {
+      mapRef.current.panTo(defaultCenter);
+      mapRef.current.setZoom(15);
+    }
+  };
 
-          // تحديث حدود البحث (Bounds) لتصبح حول موقع المستخدم الحالي
-          if (autocomplete) {
-            const circle = new google.maps.Circle({ center: pos, radius: 20000 }); // نطاق 20 كلم
-            autocomplete.setBounds(circle.getBounds());
-          }
+  const goToCurrentLocation = () => {
+    if (typeof window !== "undefined" && "geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setProfile((prev: any) => ({ ...prev, latitude: coords.lat, longitude: coords.lng }));
+          mapRef.current?.panTo(coords);
+          mapRef.current?.setZoom(17);
         },
-        () => alert("يرجى تفعيل الـ GPS")
+        () => alert("⚠️ الـ GPS مقفول! يا ريت تفتحه من إعدادات الهاتف.")
       );
     }
   };
 
-  const onPlaceChanged = () => {
-    if (autocomplete !== null) {
-      const place = autocomplete.getPlace();
-      if (place.geometry && place.geometry.location) {
-        const newLat = place.geometry.location.lat();
-        const newLng = place.geometry.location.lng();
-
-        setProfile((prev: any) => ({ ...prev, latitude: newLat, longitude: newLng }));
-        mapRef.current?.panTo({ lat: newLat, lng: newLng });
-        mapRef.current?.setZoom(16);
-      }
-    }
-  };
-
-  const onMapClick = useCallback((e: google.maps.MapMouseEvent) => {
-    if (e.latLng) {
-      setProfile((prev: any) => ({
-        ...prev,
-        latitude: e.latLng!.lat(),
-        longitude: e.latLng!.lng(),
-      }));
-    }
-  }, [setProfile]);
-
-  if (loadError) return <div className="h-full flex items-center justify-center text-red-500">خطأ في الاتصال بجوجل</div>;
-  if (!isLoaded) return <div className="h-full flex items-center justify-center">جاري التحميل...</div>;
+  // 2. إذا لم يتم التحميل بعد، نعرض واجهة انتظار بسيطة بدلاً من الخطأ
+  if (!isLoaded) {
+    return (
+      <div className="w-full h-full bg-gray-50 flex flex-col items-center justify-center space-y-3">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-[10px] font-black text-gray-400 italic">جاري تهيئة الخرائط...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full h-full relative">
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 w-[90%] z-[1000]">
-        <div className="relative flex items-center">
-          <Autocomplete
-            onLoad={(ac) => setAutocomplete(ac)}
-            onPlaceChanged={onPlaceChanged}
-            options={{
-              // تقييد داخل السودان
-              componentRestrictions: { country: "sd" },
-              // ترتيب النتائج حسب المسافة من مركز الخريطة الحالي (لحل مشكلة شارع الأزهري)
-              fields: ["geometry", "formatted_address", "name"],
-            }}
-            className="w-full"
-          >
-            <input
-              type="text"
-              placeholder="ابحث عن منطقة (مثلاً: أم درمان شارع الأزهري)..."
-              className="w-full p-4 pr-12 rounded-2xl border-none shadow-2xl text-[13px] font-bold outline-none bg-white text-gray-800"
-              onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
-            />
-          </Autocomplete>
-          
-          <button
-            onClick={handleCurrentLocation}
-            type="button"
-            className="absolute right-2 bg-[#1E293B] text-white p-2.5 rounded-xl active:scale-95 shadow-lg"
-          >
-            📍
-          </button>
-        </div>
-      </div>
+    <div 
+      className="w-full h-full relative" 
+      onTouchStart={handleTouchStart}
+    >
+      {/* زر الـ GPS العائم */}
+      <button 
+        type="button"
+        onClick={(e) => { e.preventDefault(); goToCurrentLocation(); }}
+        className="absolute bottom-32 right-6 z-[10002] bg-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center border border-gray-100 active:scale-90 transition-all"
+      >
+        <span className="text-2xl">🎯</span>
+      </button>
 
       <GoogleMap
-        mapContainerStyle={containerStyle}
-        center={{
-          lat: profile?.latitude || mapCenter[0] || SUDAN_CENTER.lat,
-          lng: profile?.longitude || mapCenter[1] || SUDAN_CENTER.lng,
-        }}
+        mapContainerStyle={{ width: "100%", height: "100%" }}
+        center={defaultCenter}
         zoom={15}
         onLoad={onMapLoad}
-        onClick={onMapClick}
         options={{
-          zoomControl: false,
-          streetViewControl: false,
-          mapTypeControl: false,
-          fullscreenControl: false,
-          clickableIcons: false
+          disableDefaultUI: true, 
+          gestureHandling: "greedy",
+        }}
+        onClick={(e) => {
+          if (e.latLng) {
+            setProfile((prev: any) => ({ 
+              ...prev, 
+              latitude: e.latLng!.lat(), 
+              longitude: e.latLng!.lng() 
+            }));
+          }
         }}
       >
-        {profile?.latitude && profile?.longitude && (
-          <Marker
-            position={{ lat: profile.latitude, lng: profile.longitude }}
-            animation={google.maps.Animation.DROP}
-          />
+        {profile?.latitude && (
+          <Marker position={{ lat: profile.latitude, lng: profile.longitude }} />
         )}
       </GoogleMap>
     </div>

@@ -12,10 +12,10 @@ export default function PackagesPage() {
   const [laundryPrices, setLaundryPrices] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isNavigating, setIsNavigating] = useState(false);
-  const [completedVisitsCount, setCompletedVisitsCount] = useState(0); // تخزين عدد الزيارات المكتملة
+  const [completedVisitsCount, setCompletedVisitsCount] = useState(0);
 
   useEffect(() => {
-    // 1. التحقق من عدد الزيارات المكتملة للعميل (منطق الزيارات فقط)
+    // 1. التحقق من عدد الزيارات المكتملة للعميل
     const checkUserEligibility = async (user: any) => {
       if (!user) return;
       const q = query(
@@ -24,7 +24,7 @@ export default function PackagesPage() {
         where("status", "==", "completed")
       );
       const snap = await getDocs(q);
-      setCompletedVisitsCount(snap.size); // حفظ العدد الفعلي
+      setCompletedVisitsCount(snap.size);
     };
 
     const unsubAuth = onAuthStateChanged(auth, (user) => {
@@ -54,31 +54,26 @@ export default function PackagesPage() {
   }, []);
 
   const handleBooking = (pkg: any) => {
-    // منطق التجميد الجديد: التحقق من الرقم المطلوب
+    // التحقق من الباقات المقفلة
     const requiredVisits = Number(pkg.minCompletedOrders || 0);
     const isLocked = pkg.showIn !== "main" && completedVisitsCount < requiredVisits;
     
-    if (isLocked) return; // منع الانتقال إذا كانت مجمدة
+    if (isLocked) return;
 
     setIsNavigating(true);
-    const params = new URLSearchParams({
-      pkgName: pkg.name || "باقة راحة",
-      pkgPrice: pkg.price ? String(pkg.price) : "0",
-      category: pkg.category || "single",
-      description: pkg.description || "",
-      image: pkg.image || "",
-      totalHours: String(pkg.hours || pkg.totalHours || "4")
-    });
+
+    // الطريقة الجديدة: إرسال الـ ID الخاص بالباقة فقط في الرابط
+    const checkoutUrl = `/checkout?id=${pkg.id}`;
     
     setTimeout(() => {
-      router.push(`/checkout?${params.toString()}`);
+      router.push(checkoutUrl);
     }, 600);
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F8FAFC]">
-        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <div className="w-12 h-12 border-4 border-[#1E293B] border-t-transparent rounded-full animate-spin mb-4"></div>
         <p className="text-[#1E293B] font-black text-xs animate-pulse italic">جاري تحضير قائمة الخدمات...</p>
       </div>
     );
@@ -87,15 +82,17 @@ export default function PackagesPage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-32 font-sans text-right" dir="rtl">
       
+      {/* واجهة التحميل أثناء الانتقال */}
       {isNavigating && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/60 backdrop-blur-md">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-blue-600 font-black text-[10px] animate-pulse">جاري تأمين الحجز...</span>
+            <div className="w-10 h-10 border-4 border-[#1E293B] border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-[#1E293B] font-black text-[10px] animate-pulse italic">جاري تأمين الحجز...</span>
           </div>
         </div>
       )}
 
+      {/* الهيدر الاحترافي */}
       <div className="relative bg-[#1E293B] pt-20 pb-24 px-8 rounded-b-[60px] shadow-2xl overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
         <h1 className="text-3xl font-black text-white italic relative z-10">قائمة <span className="text-blue-400">الخدمات</span></h1>
@@ -104,7 +101,6 @@ export default function PackagesPage() {
 
       <div className="px-6 -mt-12 space-y-6 max-w-2xl mx-auto relative z-20">
         {packages.map((pkg) => {
-          // حساب الحالة لكل باقة بشكل ديناميكي
           const required = Number(pkg.minCompletedOrders || 0);
           const isLocked = pkg.showIn !== "main" && completedVisitsCount < required;
 
@@ -138,7 +134,6 @@ export default function PackagesPage() {
                     </h3>
                   </div>
                   
-                  {/* عرض حالة القفل أو التوفر */}
                   {isLocked ? (
                     <div className="flex flex-col gap-1">
                        <span className="text-[8px] text-red-500 font-bold uppercase italic">
@@ -159,7 +154,7 @@ export default function PackagesPage() {
                 </div>
 
                 {!isLocked && (
-                  <div className="w-10 h-10 bg-[#F8FAFC] group-hover:bg-blue-600 group-hover:text-white rounded-full flex items-center justify-center text-[#1E293B] transition-colors rotate-180 border border-gray-50">
+                  <div className="w-10 h-10 bg-[#F8FAFC] group-hover:bg-[#1E293B] group-hover:text-white rounded-full flex items-center justify-center text-[#1E293B] transition-colors rotate-180 border border-gray-50">
                     →
                   </div>
                 )}
@@ -168,6 +163,44 @@ export default function PackagesPage() {
           );
         })}
 
+        {/* قسم الزيارات المتعددة */}
+        <div 
+          onClick={() => {
+            setIsNavigating(true);
+            setTimeout(() => router.push('/RahaContract'), 600);
+          }}
+          className="relative bg-gradient-to-br from-[#1E293B] to-indigo-800 rounded-[45px] p-6 shadow-2xl overflow-hidden active:scale-95 transition-all cursor-pointer border-4 border-white"
+        >
+          <div className="absolute -right-4 -bottom-4 opacity-20 rotate-12 text-8xl">📦</div>
+          <div className="relative z-10 flex justify-between items-center text-white">
+            <div className="space-y-1">
+              <div className="bg-white/20 backdrop-blur-md w-fit px-3 py-1 rounded-full border border-white/30 text-[8px] font-black uppercase italic">باقات توفير</div>
+              <h3 className="text-2xl font-black italic">زيارات متعددة</h3>
+              <p className="text-indigo-100/80 text-[10px] font-bold italic">اشتراكات شهرية مرنة تناسب احتياجك</p>
+            </div>
+            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-[#1E293B] text-xl rotate-180 shadow-xl">→</div>
+          </div>
+        </div>
+
+        {/* قسم الزيارات المنفردة */}
+        <div 
+          onClick={() => {
+            setIsNavigating(true);
+            setTimeout(() => router.push('/singleout'), 600);
+          }}
+          className="relative bg-gradient-to-br from-[#1E293B] to-purple-800 rounded-[45px] p-6 shadow-2xl overflow-hidden active:scale-95 transition-all cursor-pointer border-4 border-white"
+        >
+          <div className="absolute -right-4 -bottom-4 opacity-20 rotate-12 text-8xl">✨</div>
+          <div className="relative z-10 flex justify-between items-center text-white">
+            <div className="space-y-1">
+              <div className="bg-white/20 backdrop-blur-md w-fit px-3 py-1 rounded-full border border-white/30 text-[8px] font-black uppercase italic">زيارة لمرة واحدة</div>
+              <h3 className="text-2xl font-black italic">زيارات منفردة</h3>
+              <p className="text-purple-100/80 text-[10px] font-bold italic">خدمة سريعة ومتميزة عند الطلب</p>
+            </div>
+            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-[#1E293B] text-xl rotate-180 shadow-xl">→</div>
+          </div>
+        </div>
+
         {/* قسم غسيل دليفري */}
         {laundryPrices && (
           <div 
@@ -175,7 +208,7 @@ export default function PackagesPage() {
               setIsNavigating(true);
               setTimeout(() => router.push('/checkout2'), 600);
             }}
-            className="relative bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[45px] p-6 shadow-2xl overflow-hidden active:scale-95 transition-all cursor-pointer border-4 border-white"
+            className="relative bg-gradient-to-br from-[#1E293B] to-blue-700 rounded-[45px] p-6 shadow-2xl overflow-hidden active:scale-95 transition-all cursor-pointer border-4 border-white"
           >
             <div className="absolute -right-4 -bottom-4 opacity-20 rotate-12 text-8xl">🧺</div>
             <div className="relative z-10 flex justify-between items-center text-white">
@@ -184,7 +217,7 @@ export default function PackagesPage() {
                 <h3 className="text-2xl font-black italic">غسيل دليفري</h3>
                 <p className="text-indigo-100/80 text-[10px] font-bold italic">نستلم ملابسك ونعيدها لك</p>
               </div>
-              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-indigo-600 text-xl rotate-180 shadow-xl">→</div>
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-[#1E293B] text-xl rotate-180 shadow-xl">→</div>
             </div>
           </div>
         )}

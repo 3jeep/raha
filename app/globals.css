@@ -128,3 +128,20 @@ img {
   max-width: 100%;
   height: auto;
 }
+/* إجبار قائمة البحث على الظهور في أعلى طبقة */
+.pac-container {
+    z-index: 9999999 !important;
+    position: fixed !important;
+    top: 140px !important; /* عدلها لو القائمة ظهرت في مكان غلط */
+    left: 20px !important;
+    right: 20px !important;
+    border-radius: 20px !important;
+    padding: 10px !important;
+}
+
+/* تحسين شكل الاقتراحات */
+.pac-item {
+    padding: 10px !important;
+    font-family: sans-serif !important;
+    cursor: pointer !important;
+}

@@ -1,4 +1,4 @@
-"use client";
+ "use client";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { 
@@ -171,7 +171,6 @@ export default function AdminControlCenter() {
           {id:"staff", label:"العاملات", icon:"👩‍💼"},
           {id:"logistics", label:"السائقين", icon:"🚚"},
           {id:"packages", label:"العروض", icon:"📦"},
-          {id:"settings", label:"الإعدادات", icon:"⚙️"},
           {id:"laundry", label:"الغسيل", icon:"🧺"}
         ].map(t => (
           <button 
@@ -315,37 +314,7 @@ export default function AdminControlCenter() {
           </div>
         )}
 
-        {/* Settings Tab */}
-        {activeTab === "settings" && (
-          <div className="space-y-6 animate-in fade-in">
-            <div className="bg-white p-8 rounded-[40px] shadow-sm border-t-4 border-green-500 space-y-8">
-              <h3 className="font-black text-gray-800 text-sm">الإعدادات والأسعار</h3>
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-gray-400 uppercase">رقم واتساب الدعم</label>
-                <input type="text" value={whatsappNumber ?? ""} onChange={(e) => setWhatsappNumber(e.target.value)} placeholder="249..." className="w-full p-4 rounded-2xl bg-gray-50 text-xs font-bold outline-none border border-transparent focus:border-green-200" />
-              </div>
-              <button disabled={loading} onClick={saveSettings} className="w-full bg-green-600 text-white py-4 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">
-                {loading ? "جاري الحفظ..." : "حفظ كافة التغييرات ✅"}
-              </button>
-            </div>
 
-            <div className="bg-white p-8 rounded-[40px] shadow-sm border-t-4 border-red-500 space-y-6">
-              <h3 className="font-black text-gray-800 text-sm italic">📅 إدارة إغلاق الحجز</h3>
-              <div className="flex gap-2">
-                <input type="date" value={selectedDate ?? ""} onChange={(e) => setSelectedDate(e.target.value)} className="flex-1 p-4 rounded-2xl bg-gray-50 text-xs font-black outline-none border border-gray-100" />
-                <button disabled={loading} onClick={addFullDay} className="bg-red-600 text-white px-6 rounded-2xl font-black text-[10px] shadow-md">إضافة اليوم ⛔</button>
-              </div>
-              <div className="space-y-2">
-                {fullDays.map(date => (
-                  <div key={date} className="flex justify-between items-center bg-red-50 p-4 rounded-2xl border border-red-100">
-                    <span className="text-[11px] font-black text-red-700">{date}</span>
-                    <button onClick={() => removeFullDay(date)} className="text-red-400 font-black text-xs bg-white px-3 py-1 rounded-xl shadow-sm">حذف</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

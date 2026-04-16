@@ -66,7 +66,7 @@ export const showToast = (message: string, type: 'success' | 'error' | 'info' = 
     toast.style.transform = "translate(-50%, 20px)";
     toast.style.transition = "all 0.5s ease";
     setTimeout(() => { if (document.body.contains(toast)) document.body.removeChild(toast); }, 500);
-  }, 3000);
+  }, 5000);
 };
 
 /**
@@ -146,7 +146,7 @@ export const getCurrentGPSLocation = (): Promise<{ lat: number; lng: number }> =
         resolve(location);
       },
       (err) => {
-        showToast("فشل تحديد الموقع، تأكد من الـ GPS", "error");
+        showToast("فشل تحديد الموقع، تلقائياً ، أدخِل عنوانك يدوياً", "error");
         reject(err);
       }
     );
