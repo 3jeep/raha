@@ -2,36 +2,30 @@
 import React, { useCallback, useRef, useMemo } from "react";
 import { GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 
-// تعريف المكتبات خارج المكون لضمان استقرار الأداء
+// 1. التعريفات خارج المكون لضمان عدم حدوث Loop في التحميل
 const libraries: ("places" | "geometry" | "maps")[] = ["places", "geometry", "maps"];
 
 export default function MapComponent({ mapCenter, setProfile, profile }: any) {
-  const mapRef = useRef<any>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
 
-  // 1. استخدام Loader الخاص بالمكتبة لضمان التحميل الآمن
-  const { isLoaded } = useJsApiLoader({
+  // 2. توحيد الإعدادات (نفس الإعدادات في كل المشروع)
+  const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: "AIzaSyCscTfT9KnGnoGj0dR96n8YbLFk5YdW2p0", // تأكد من استخدام مفتاحك
+    googleMapsApiKey: "AIzaSyCscTfT9KnGnoGj0dR96n8YbLFk5YdW2p0",
     libraries,
     language: 'ar',
-    region: 'SD',
+    // نصيحة: إذا استمر الخطأ، احذف سطر region تماماً من كل الملفات
+    region: 'SD', 
   });
 
   const defaultCenter = useMemo(() => ({
-    lat: profile?.latitude || (Array.isArray(mapCenter) ? mapCenter[0] : 15.5007),
-    lng: profile?.longitude || (Array.isArray(mapCenter) ? mapCenter[1] : 32.5599),
+    lat: Number(profile?.latitude) || (Array.isArray(mapCenter) ? mapCenter[0] : 15.5007),
+    lng: Number(profile?.longitude) || (Array.isArray(mapCenter) ? mapCenter[1] : 32.5599),
   }), [profile?.latitude, profile?.longitude, mapCenter]);
 
-  const onMapLoad = useCallback((map: any) => {
+  const onMapLoad = useCallback((map: google.maps.Map) => {
     mapRef.current = map;
   }, []);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length > 1 && mapRef.current) {
-      mapRef.current.panTo(defaultCenter);
-      mapRef.current.setZoom(15);
-    }
-  };
 
   const goToCurrentLocation = () => {
     if (typeof window !== "undefined" && "geolocation" in navigator) {
@@ -42,12 +36,13 @@ export default function MapComponent({ mapCenter, setProfile, profile }: any) {
           mapRef.current?.panTo(coords);
           mapRef.current?.setZoom(17);
         },
-        () => alert("⚠️ الـ GPS مقفول! يا ريت تفتحه من إعدادات الهاتف.")
+        () => alert("⚠️ الـ GPS مقفول!")
       );
     }
   };
 
-  // 2. إذا لم يتم التحميل بعد، نعرض واجهة انتظار بسيطة بدلاً من الخطأ
+  if (loadError) return <div className="p-4 text-red-500 text-xs">خطأ في تحميل الخريطة</div>;
+
   if (!isLoaded) {
     return (
       <div className="w-full h-full bg-gray-50 flex flex-col items-center justify-center space-y-3">
@@ -58,15 +53,11 @@ export default function MapComponent({ mapCenter, setProfile, profile }: any) {
   }
 
   return (
-    <div 
-      className="w-full h-full relative" 
-      onTouchStart={handleTouchStart}
-    >
-      {/* زر الـ GPS العائم */}
+    <div className="w-full h-full relative">
       <button 
         type="button"
         onClick={(e) => { e.preventDefault(); goToCurrentLocation(); }}
-        className="absolute bottom-32 right-6 z-[10002] bg-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center border border-gray-100 active:scale-90 transition-all"
+        className="absolute bottom-32 right-6 z-[10] bg-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center border border-gray-100 active:scale-90 transition-all"
       >
         <span className="text-2xl">🎯</span>
       </button>
@@ -91,7 +82,7 @@ export default function MapComponent({ mapCenter, setProfile, profile }: any) {
         }}
       >
         {profile?.latitude && (
-          <Marker position={{ lat: profile.latitude, lng: profile.longitude }} />
+          <Marker position={{ lat: Number(profile.latitude), lng: Number(profile.longitude) }} />
         )}
       </GoogleMap>
     </div>

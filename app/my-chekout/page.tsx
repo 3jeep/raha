@@ -182,7 +182,7 @@ export default function MyCheckoutPage() {
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-[#1E293B]/95 backdrop-blur-md h-16 rounded-[25px] flex items-center justify-around px-6 z-50 border border-white/10">
         {[
           { n: "الرئيسية", i: "🏠", p: "/" }, 
-          { n: "طلباتي", i: "📋", p: "/my-checkout" }, 
+          { n: "طلباتي", i: "📋", p: "/my-chekout" }, 
           { n: "حسابي", i: "👤", p: "/profile" }
         ].map((item) => (
           <Link key={item.p} href={item.p} className={`flex flex-col items-center transition-all ${pathname === item.p ? 'opacity-100 scale-110' : 'opacity-40'}`}>

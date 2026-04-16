@@ -113,7 +113,7 @@ export default function LaundryCheckout() {
         createdAt: serverTimestamp(),
       });
       showToast("🚀 تم إرسال طلب الغسيل بنجاح!");
-      router.push("/my-checkout");
+      router.push("/my-chekout");
     });
   };
 
