@@ -25,6 +25,13 @@ export default function CompletedLaundryPage() {
     return () => unsub();
   }, []);
 
+  // دالة تنسيق التاريخ والوقت بصورة مبسطة
+  const formatDateTime = (timestamp: any) => {
+    if (!timestamp) return "---";
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
+    return date.toLocaleString('ar-EG', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
   // منطق التصفية (بحث بالاسم/الرقم + فلترة بالتاريخ)
   const filtered = completedOrders.filter(o => {
     const matchSearch = o.userName?.toLowerCase().includes(searchTerm.toLowerCase()) || o.orderNumber?.toString().includes(searchTerm);
@@ -84,15 +91,33 @@ export default function CompletedLaundryPage() {
         {filtered.length > 0 ? filtered.map((order) => (
           <div key={order.id} className="bg-white rounded-[35px] shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-6">
+              
+              {/* تواريخ التتبع في الجزء العلوي */}
+              <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-50">
+                 <div className="flex flex-col gap-1">
+                    <p className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">📅 طلب: {formatDateTime(order.createdAt)}</p>
+                    <p className="text-[8px] font-black text-blue-500 uppercase tracking-tighter">🚀 بدأت: {formatDateTime(order.receivedAt)}</p>
+                 </div>
+                 <div className="bg-green-50 text-green-600 px-3 py-1 rounded-full text-[8px] font-black border border-green-100">
+                     تم التسليم بنجاح ✅
+                 </div>
+              </div>
+
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h4 className="font-black text-gray-800 text-base">{order.userName}</h4>
+                  <div className="flex items-center gap-3">
+                    <h4 className="font-black text-gray-800 text-base">{order.userName}</h4>
+                    <a 
+                      href={`https://wa.me/${order.contactPhone?.replace(/\s/g, '')}`} 
+                      target="_blank" 
+                      className="bg-green-500 text-white p-1.5 rounded-full text-[10px] shadow-sm hover:bg-green-600 transition-colors"
+                    >
+                      💬
+                    </a>
+                  </div>
                   <p className="text-[9px] text-gray-400 font-bold mt-1">طلب رقم #{order.orderNumber}</p>
                 </div>
                 <div className="text-left">
-                   <div className="bg-green-50 text-green-600 px-3 py-1 rounded-full text-[8px] font-black border border-green-100">
-                     تم التسليم بنجاح ✅
-                   </div>
                    {order.rating && (
                      <p className="text-[8px] font-black text-blue-600 mt-2 italic">التقييم: {order.rating}</p>
                    )}

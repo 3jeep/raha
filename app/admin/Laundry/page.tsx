@@ -54,6 +54,13 @@ export default function AdminLaundryPage() {
     setFilteredOrders(result);
   }, [searchTerm, statusFilter, orders]);
 
+  // دالة تنسيق التاريخ
+  const formatDateTime = (timestamp: any) => {
+    if (!timestamp) return "---";
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
+    return date.toLocaleString('ar-EG', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
   // دالة إغلاق الطلب (تسليم نهائي)
   const finalizeDelivery = async () => {
     if (!assignedDriver) return alert("يرجى اختيار السائق الموصل أولاً");
@@ -66,7 +73,7 @@ export default function AdminLaundryPage() {
         deliveredByDriver: assignedDriver,
         finalizedByAdmin: adminName,
         actualDeliveredAt: serverTimestamp(),
-        isRated: false // التقييم يُترك ليقوم به العميل من حسابه
+        isRated: false 
       });
       setShowDeliveryModal(false);
       setSelectedOrder(null);
@@ -133,18 +140,35 @@ export default function AdminLaundryPage() {
       {/* قائمة الطلبات */}
       <div className="px-6 max-w-4xl mx-auto space-y-5">
         {filteredOrders.length > 0 ? filteredOrders.map(order => (
-          <div key={order.id} className="bg-white rounded-[40px] shadow-sm p-7 border border-gray-100 transition-all hover:shadow-md">
+          <div key={order.id} className="bg-white rounded-[40px] shadow-sm p-7 border border-gray-100 transition-all hover:shadow-md relative overflow-hidden">
+            
+            <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-50">
+               <div className="flex flex-col gap-1">
+                  <p className="text-[8px] font-black text-gray-400 uppercase">📅 طلب: {formatDateTime(order.createdAt)}</p>
+                  <p className="text-[8px] font-black text-blue-500 uppercase">🚀 بدأت: {formatDateTime(order.receivedAt)}</p>
+               </div>
+               <div className={`px-4 py-1 rounded-full text-[8px] font-black ${order.status === 'pending' ? 'bg-orange-50 text-orange-600 border border-orange-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+                {order.status === 'pending' ? 'بإنتظار الاستلام' : 'قيد الغسيل'}
+              </div>
+            </div>
+
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h4 className="font-black text-lg text-gray-800">{order.userName}</h4>
+                <div className="flex items-center gap-3">
+                  <h4 className="font-black text-lg text-gray-800">{order.userName}</h4>
+                  <a 
+                    href={`https://wa.me/${order.contactPhone?.replace(/\s/g, '')}`} 
+                    target="_blank" 
+                    className="bg-green-500 text-white p-2 rounded-full text-xs shadow-sm hover:bg-green-600 transition-colors"
+                  >
+                    💬
+                  </a>
+                </div>
                 <div className="flex gap-2 items-center mt-1">
                    <p className="text-[10px] text-blue-600 font-bold">{order.contactPhone}</p>
                    <span className="text-gray-300">|</span>
                    <p className="text-[9px] text-gray-400 font-black">#{order.orderNumber}</p>
                 </div>
-              </div>
-              <div className={`px-4 py-1 rounded-full text-[8px] font-black ${order.status === 'pending' ? 'bg-orange-50 text-orange-600 border border-orange-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
-                {order.status === 'pending' ? 'بإنتظار الاستلام' : 'قيد الغسيل'}
               </div>
             </div>
 

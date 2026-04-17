@@ -1,12 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
 import { auth, db } from "@/lib/firebase";
-import { collection, query, where, getDocs, doc, updateDoc, getDoc, or } from "firebase/firestore"; // تم إضافة or للاستعلام المزدوج
+import { collection, query, where, getDocs, doc, updateDoc, getDoc, or } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import Link from "next/link"; // لإضافة الرابط التشعبي
+import Link from "next/link";
 
 export default function AccessPage() {
-  const [searchTerm, setSearchTerm] = useState(""); // تغيير الاسم من email إلى searchTerm
+  const [searchTerm, setSearchTerm] = useState("");
   const [foundUser, setFoundUser] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -34,7 +34,6 @@ export default function AccessPage() {
 
     try {
       const term = searchTerm.trim().toLowerCase();
-      // استعلام يبحث في الإيميل أو رقم الهاتف
       const q = query(
         collection(db, "users"), 
         or(
@@ -93,7 +92,7 @@ export default function AccessPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4">
-      {/* هيدر الصفحة المحدث */}
+      {/* هيدر الصفحة المحدث مع رابط صفحة التنظيف */}
       <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-800 italic flex items-center gap-3">
@@ -103,13 +102,22 @@ export default function AccessPage() {
           <p className="text-[11px] text-slate-400 font-black mr-12 uppercase tracking-tighter">نظام منح وإلغاء صلاحيات الموظفين</p>
         </div>
         
-        {/* رابط الإعدادات المخصص للسوبر أدمن فقط */}
-        <Link 
-          href="/admin/settings" 
-          className="flex items-center gap-2 bg-blue-50 text-blue-600 px-5 py-3 rounded-2xl text-[10px] font-black hover:bg-blue-600 hover:text-white transition-all border border-blue-100 shadow-sm"
-        >
-          <span>⚙️</span> إعدادات النظام
-        </Link>
+        <div className="flex gap-2 w-full sm:w-auto">
+            {/* زر تنظيف البيانات الجديد */}
+            <Link 
+              href="/admin/Clear" 
+              className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-[10px] font-black hover:bg-red-600 hover:text-white transition-all border border-red-100 shadow-sm"
+            >
+              <span>🔥</span> تنظيف البيانات
+            </Link>
+
+            <Link 
+              href="/admin/settings" 
+              className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-3 rounded-2xl text-[10px] font-black hover:bg-blue-600 hover:text-white transition-all border border-blue-100 shadow-sm"
+            >
+              <span>⚙️</span> إعدادات النظام
+            </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
