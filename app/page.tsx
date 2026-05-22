@@ -395,7 +395,7 @@ export default function WelcomePage() {
         </div>
 
         <div 
-          onClick={() => { setIsNavigating(true); router.push("/checkout"); }}
+          onClick={() => { setIsNavigating(true); router.push("/checkout2"); }}
           className="w-full p-[22px] bg-gradient-to-bl from-[#1E293B] to-[#2196F3] rounded-[40px] flex justify-between items-center shadow-lg cursor-pointer active:scale-98 transition-all"
         >
           <div className="flex flex-col text-white space-y-1 pl-4">
