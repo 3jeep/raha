@@ -34,7 +34,7 @@ const BottomNav = lazy(() => Promise.resolve({ default: () => {
 
   const navItems = [
     { name: "الرئيسية", icon: "🏠", path: "/" },
-    { name: "طلباتي", icon: "📋", path: "/my-bookings" }, 
+    { name: "طلباتي", icon: "📋", path: "/my-chekout" }, 
     { name: "العروض", icon: "🏷️", path: "/packages" },
     { name: "حسابي", icon: "👤", path: "/profile", hasDot: isProfileIncomplete },
   ];

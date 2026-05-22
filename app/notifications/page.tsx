@@ -1,28 +1,39 @@
 "use client";
-import { useEffect, useState, Suspense, lazy } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { db, auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, getDocs, writeBatch } from "firebase/firestore";
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  onSnapshot, 
+  doc, 
+  updateDoc, 
+  getDocs, 
+  writeBatch, 
+  where 
+} from "firebase/firestore";
 import { Bell, Clock, ChevronLeft, Trash2 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { showToast } from "@/lib/utils";
 
-// --- 1. تعريف شريط التنقل السفلي الموحد ---
-const BottomNav = lazy(() => Promise.resolve({ default: () => {
+// --- شريط التنقل السفلي الموحد ---
+const BottomNav = () => {
   const pathname = usePathname();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (user) => setCurrentUser(user || null));
-    return () => unsubAuth();
+    return onAuthStateChanged(auth, (user) => setCurrentUser(user || null));
   }, []);
 
   useEffect(() => {
     if (!currentUser) return;
-    // تعديل مسار قراءة عدد الإشعارات ليطابق المسار الجديد (المجموعة الفرعية)
-    const qNoti = query(collection(db, "users", currentUser.uid, "notifications"), where("isRead", "==", false));
+    const qNoti = query(
+      collection(db, "users", currentUser.uid, "notifications"), 
+      where("isRead", "==", false)
+    );
     return onSnapshot(qNoti, (snap) => setUnreadCount(snap.size));
   }, [currentUser]);
 
@@ -51,41 +62,38 @@ const BottomNav = lazy(() => Promise.resolve({ default: () => {
       ))}
     </div>
   );
-}}));
+};
 
 export default function NotificationsPage() {
   const [user, setUser] = useState<any>(null);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (curr) => { setUser(curr); if(!curr) setLoading(false); });
-    return () => unsubAuth();
+    return onAuthStateChanged(auth, (curr) => { 
+      setUser(curr); 
+      setLoading(false); 
+    });
   }, []);
 
   useEffect(() => {
     if (!user) return;
-    // التعديل الجوهري: القراءة من المجموعة الفرعية داخل وثيقة المستخدم
     const q = query(collection(db, "users", user.uid, "notifications"), orderBy("createdAt", "desc"));
     return onSnapshot(q, (snap) => {
-      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })) as any);
-      setLoading(false);
+      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, [user]);
 
-  // تعديل دالة قراءة الإشعار لتعمل على المسار الجديد
   const markRead = async (id: string) => { 
     try { 
       await updateDoc(doc(db, "users", user.uid, "notifications", id), { isRead: true }); 
     } catch(e) { console.error(e); } 
   };
 
-  // تعديل دالة حذف الكل لتعمل على المسار الجديد
   const clearAllNotifications = async () => {
     if (!user || notifications.length === 0) return;
-    const confirmClear = confirm("⚠️ هل أنت متأكد من حذف جميع الإشعارات؟");
-    if (!confirmClear) return;
+    if (!confirm("⚠️ هل أنت متأكد من حذف جميع الإشعارات؟")) return;
 
     try {
       const q = collection(db, "users", user.uid, "notifications");
@@ -121,7 +129,7 @@ export default function NotificationsPage() {
         </div>
         <div className="flex gap-2">
           {notifications.length > 0 && (
-            <button onClick={clearAllNotifications} className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center border border-red-100 transition-active active:scale-90">
+            <button onClick={clearAllNotifications} className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center border border-red-100 transition-all active:scale-90">
               <Trash2 size={18} className="text-red-500" />
             </button>
           )}
@@ -151,7 +159,7 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      <Suspense fallback={null}><BottomNav /></Suspense>
+      <BottomNav />
     </div>
   );
 }
