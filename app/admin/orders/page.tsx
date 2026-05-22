@@ -6,7 +6,9 @@ import {
   collection, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, serverTimestamp, where, getDocs, limit, addDoc 
 } from "firebase/firestore";
 import Link from "next/link";
-import { showToast, handleUpdate, handleDelete } from "@/lib/utils";
+import { showToast, handleUpdate, handleDelete } from "@/lib/utils"; 
+// استيراد دالة الإشعارات الذكية من ملفك
+import { sendSmartNotification } from "@/utils/notif-logic"; 
 
 const LiveTrackingModal = dynamic(() => import("@/components/LiveTrackingModal"), {
   ssr: false, 
@@ -105,6 +107,17 @@ export default function AdminOrdersPage() {
 
     const fetchFromCollection = (collectionName: string) => {
       return onSnapshot(query(collection(db, collectionName), orderBy("createdAt", "desc")), async (snap) => {
+        
+        snap.docChanges().forEach((change) => {
+          if (change.type === "added") {
+            const newOrder = change.doc.data();
+            const isFresh = (Date.now() - (newOrder.createdAt?.seconds * 1000)) < 10000;
+            if (isFresh) {
+              showToast(`طلب جديد من ${newOrder.fullName || newOrder.userName} 🔔`, "info");
+            }
+          }
+        });
+
         const raw = await Promise.all(snap.docs.map(async (d) => {
           const data = { id: d.id, ...d.data(), sourceCollection: collectionName } as any;
 
@@ -296,12 +309,51 @@ export default function AdminOrdersPage() {
                 <button 
                   disabled={b.hasVisitToday}
                   onClick={async () => { 
-                    const m = b.assignedMaid || b.suggestedMaid; const v = b.assignedVehicle || b.suggestedVehicle; 
+                    const m = b.assignedMaid || b.suggestedMaid; 
+                    const v = b.assignedVehicle || b.suggestedVehicle; 
+                    
                     if(!m || !v) return showToast("يرجى التعيين أولاً", "error"); 
-                    const updates: any = { status: "in-progress", assignedMaid: m, assignedVehicle: v, actualStartedAt: serverTimestamp() };
-                    if ((b.type === "monthly_contract" || b.category === "monthly_contract") && !b.contractStartDate) updates.contractStartDate = serverTimestamp();
-                    await handleUpdate(b.sourceCollection, b.id, updates);
-                    showToast("تم بدء المهمة 🚀");
+
+                    const updates: any = { 
+                      status: "in-progress", 
+                      assignedMaid: m, 
+                      assignedVehicle: v, 
+                      actualStartedAt: serverTimestamp() 
+                    };
+
+                    const isMonthly = b.type === "monthly_contract" || b.category === "monthly_contract";
+                    if (isMonthly && !b.contractStartDate) updates.contractStartDate = serverTimestamp();
+
+                    try {
+                      // 1. تحديث الحالة
+                      await handleUpdate(b.sourceCollection, b.id, updates);
+                      
+                      // 2. تسجيل زيارة جديدة في السجل (للعقود)
+                      if (isMonthly) {
+                        await addDoc(collection(db, "contracts", b.id, "visits"), {
+                          type: "start_record",
+                          visitDate: serverTimestamp(),
+                          startedAt: serverTimestamp(),
+                          status: "started",
+                          maid: m,
+                          vehicle: v
+                        });
+                      }
+
+                      // 3. إرسال الإشعارات الذكية
+                      await sendSmartNotification('user', 'in-progress', {
+                        userId: b.userId,
+                        customerName: b.fullName || b.userName,
+                        orderId: b.id,
+                        token: b.fcmToken,
+                        url: "/my-chekout"
+                      });
+                      
+                      showToast("تم بدء المهمة وإخطار العميل 🚀");
+                    } catch (error) {
+                      console.error(error);
+                      showToast("خطأ في العملية", "error");
+                    }
                   }} 
                   className={`w-full py-5 rounded-3xl font-black text-xs transition-all ${b.hasVisitToday ? 'bg-gray-300 text-gray-500 cursor-not-allowed border-2 border-gray-100' : 'bg-[#1E293B] text-white'}`}
                 >
@@ -348,6 +400,15 @@ export default function AdminOrdersPage() {
                 };
 
                 await handleUpdate(selectedOrder.sourceCollection, selectedOrder.id, updates);
+
+                // إشعار اكتمال التنفيذ للمستخدم عبر النظام الذكي
+                await sendSmartNotification('user', 'completed', {
+                  userId: selectedOrder.userId,
+                  customerName: selectedOrder.fullName || selectedOrder.userName,
+                  orderId: selectedOrder.id,
+                  token: selectedOrder.fcmToken,
+                  url: "/my-chekout"
+                });
 
                 setShowModal(false);
                 showToast(isMonthly ? "تم تسجيل الزيارة ✅" : "تم إنهاء الزيارة بنجاح ✅");

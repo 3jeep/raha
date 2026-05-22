@@ -9,7 +9,10 @@ import { useRouter } from "next/navigation";
 import { 
   User, Calendar, MapPin, CheckCircle2, Loader2, Info, Clock, ArrowRight
 } from "lucide-react";
-import { showToast, runSafe, getCurrentGPSLocation, isValidSudanesePhone } from "@/lib/utils";
+// إضافة getFCMToken للمستوردات
+import { showToast, runSafe, getCurrentGPSLocation, isValidSudanesePhone, getFCMToken } from "@/lib/utils";
+// استيراد منطق الإشعارات الذكي
+import { sendSmartNotification } from "@/utils/notif-logic";
 
 function CheckoutContent() {
   const router = useRouter();
@@ -70,15 +73,19 @@ function CheckoutContent() {
       }
       setUser(currentUser);
       
-      const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        setFormData(prev => ({
-          ...prev,
-          fullName: data.fullName || "",
-          phone: data.phone || "",
-          locationText: data.address || ""
-        }));
+      try {
+        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setFormData(prev => ({
+            ...prev,
+            fullName: data.fullName || "",
+            phone: data.phone || "",
+            locationText: data.address || ""
+          }));
+        }
+      } catch (err) {
+        console.error("User fetch error:", err);
       }
       setLoading(false);
     });
@@ -102,7 +109,6 @@ function CheckoutContent() {
     checkAvailability();
   }, [formData.startDate, totalMaidsCount, adminFullDays]);
 
-  // --- التعديل هنا لطلب الإذن ومعالجة الحظر ---
   const handleGetLocation = async () => {
     setLocating(true);
     try {
@@ -114,9 +120,8 @@ function CheckoutContent() {
       }));
       showToast("📍 تم تحديد موقعك بنجاح", "success");
     } catch (e: any) {
-      // رسالة تنبيهية في حال تم حظر الإذن من المتصفح
       if (e.code === 1 || e.message?.includes("denied")) {
-        showToast("⚠️ الموقع محظور! يرجى السماح بالوصول للموقع من إعدادات المتصفح (أيقونة القفل 🔒) لتأكيد الحجز", "error");
+        showToast("⚠️ الموقع محظور! يرجى السماح بالوصول من إعدادات المتصفح", "error");
       } else {
         showToast("❌ فشل تحديد الموقع، تأكد من فتح الـ GPS", "error");
       }
@@ -130,13 +135,30 @@ function CheckoutContent() {
     if (!isValidSudanesePhone(formData.phone)) return;
 
     await runSafe(setIsSubmitting, async () => {
-      await addDoc(collection(db, "bookings"), {
+      let token = null;
+      try {
+        token = await getFCMToken();
+      } catch (e) {
+        console.log("FCM Token skipped or denied");
+      }
+
+      // 1. حفظ الطلب في Firestore
+      const docRef = await addDoc(collection(db, "bookings"), {
         ...formData,
         userId: user.uid,
         email: user.email, 
+        fcmToken: token,
         createdAt: serverTimestamp(),
         totalHours: 5, 
       });
+
+      // 2. إرسال إشعار فوري للأدمن (المنطق الجديد)
+      await sendSmartNotification('admin', 'new-order-admin', {
+        customerName: formData.fullName,
+        orderId: docRef.id,
+        userId: user.uid
+      });
+
       showToast("🚀 تم حجز موعدك بنجاح!");
       router.replace("/my-chekout");
     });
@@ -231,7 +253,6 @@ function CheckoutContent() {
                     if (!formData.fullName || !formData.startDate || !formData.phone) return showToast("⚠️ أكمل البيانات", "info");
                     setStep(2);
                 } else {
-                    // --- التعديل هنا لمنع الإرسال بدون إحداثيات ---
                     if (!formData.locationCoords) {
                       return showToast("⚠️ يرجى الضغط على زر تحديد الموقع (GPS) أولاً لضمان دقة الخدمة", "error");
                     }

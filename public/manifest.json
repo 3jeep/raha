@@ -1,9 +1,12 @@
 {
-  "name": "RaHa - راحة للخدمات المنزلية",
-  "short_name": "RaHa",
-  "description": "تطبيق راحة للخدمات المنزلية المتميزة - حلول ذكية وعصرية لمنزلك",
+  "id": "com.raha.hr.v1",
+  "name": "Raha - راحة للموارد البشرية",
+  "short_name": "راحة",
+  "description": "تطبيق راحة للموارد البشرية - حلول ذكية وعصرية لإدارة الخدمات والموارد",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#1E293B",
@@ -16,24 +19,79 @@
     },
     {
       "src": "/icon.png",
+      "sizes": "360x360",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     }
   ],
-  "categories": ["lifestyle", "utilities"],
+  "screenshots": [
+    {
+      "src": "/screenshots/home_screen.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "الواجهة الرئيسية لتطبيق راحة"
+    },
+    {
+      "src": "/screenshots/home_screen2.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "خدماتنا الرئيسية"
+    },
+    {
+      "src": "/screenshots/packages.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "قائمة الخدمات والعروض الحصرية"
+    },
+    {
+      "src": "/screenshots/handymen.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "خدمة مجانيه البحث عن اقرب حرفي"
+    }
+  ],
+  "scope_extensions": [
+    { "origin": "https://raha.net" },
+    { "origin": "https://*.raha.net" },
+    { "origin": "https://ra7a.netlify.app" }
+  ],
+  "categories": ["business", "utilities"],
   "lang": "ar-SA",
   "dir": "rtl",
   "shortcuts": [
     {
-      "name": "الطلبات",
-      "url": "/admin/orders",
+      "name": "دخول مشرفين فقط",
+      "url": "/admin/access",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "الملف الشخصي",
-      "url": "/profile",
+      "name": "طلباتي",
+      "url": "/my_chekout",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "ابحث عن حرفي لبيتك..",
+      "url": "/handymen",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
-  ]
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.raha.hr.v1",
+      "id": "com.raha.hr.v1"
+    }
+  ],
+  "prefer_related_applications": false,
+  "iarc_rating_id": ""
 }

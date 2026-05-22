@@ -8,7 +8,10 @@ import {
   User, Calendar, ShieldCheck, UserCheck, 
   AlertTriangle, CreditCard, Scale, CheckCircle2, Loader2, Clock, ScrollText, MapPin 
 } from "lucide-react";
-import { showToast, runSafe, isValidSudanesePhone } from "@/lib/utils";
+// إضافة getFCMToken للمستوردات لضمان جلب التوكن
+import { showToast, runSafe, isValidSudanesePhone, getFCMToken } from "@/lib/utils";
+// استيراد دالة الإشعارات الذكية
+import { sendSmartNotification } from "@/utils/notif-logic";
 
 export default function RahaContract() {
   const router = useRouter();
@@ -28,7 +31,7 @@ export default function RahaContract() {
     address: "" 
   });
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
-  const [userId, setUserId] = useState(""); // حالة لحفظ الـ UID
+  const [userId, setUserId] = useState("");
 
   // --- Functions ---
   
@@ -45,8 +48,9 @@ export default function RahaContract() {
         const locationLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
         setProfile(prev => ({ 
           ...prev, 
-          address: `${prev.address}\n📍 الموقع الجغرافي: ${locationLink}` 
-        }));
+          address: `${prev.address}\n📍 الموقع الجغرافي محدد عبر GPS`,
+          locationCoords: { lat: latitude, lng: longitude }
+        } as any));
         showToast("📍 تم تحديد موقعك بنجاح", "success");
         setLocating(false);
       },
@@ -67,7 +71,7 @@ export default function RahaContract() {
         return;
       }
       
-      setUserId(user.uid); // حفظ الـ UID فور التأكد من تسجيل الدخول
+      setUserId(user.uid);
 
       try {
         const docSnap = await getDoc(doc(db, "users", user.uid));
@@ -112,10 +116,22 @@ export default function RahaContract() {
   };
 
   const finalizeBooking = async () => {
+    if (!hasAccepted) return showToast("⚠️ يرجى الموافقة على شروط العقد", "info");
+
     await runSafe(setIsSubmitting, async () => {
-      await addDoc(collection(db, "contracts"), { // تم التعديل إلى contracts للتنظيم أو ابقها bookings حسب رغبتك
+      // 1. جلب توكن الإشعارات (لضمان وصول الإشعارات للعميل لاحقاً)
+      let token = null;
+      try {
+        token = await getFCMToken();
+      } catch (e) {
+        console.log("FCM Token skipped or denied");
+      }
+
+      // 2. حفظ العقد في Firestore مع التوكن
+      const docRef = await addDoc(collection(db, "contracts"), {
         ...profile,
-        userId: userId, // تم إضافة الـ UID هنا
+        userId: userId,
+        fcmToken: token, 
         selectedDays,
         contractId,
         totalHours: 5,
@@ -123,6 +139,24 @@ export default function RahaContract() {
         status: "pending",
         createdAt: serverTimestamp(),
       });
+
+      // 3. إرسال إشعار فوري للأدمن (طلب عقد جديد)
+      await sendSmartNotification('admin', 'new-order-admin', {
+        customerName: profile.fullName,
+        orderId: contractId,
+        userId: userId
+      });
+
+      // 4. إرسال إشعار تأكيد استلام الطلب للعميل
+      if (token) {
+        await sendSmartNotification('user', 'pending', {
+          customerName: profile.fullName,
+          orderId: contractId,
+          userId: userId,
+          token: token
+        });
+      }
+
       showToast("🚀 تم توثيق العقد بنجاح!");
       router.replace("/my-chekout");
     });
@@ -140,7 +174,7 @@ export default function RahaContract() {
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans text-right" dir="rtl">
       
-      <div className="bg-[#1E293B] text-white p-6 rounded-b-[40px] shadow-lg shrink-0 z-10">
+      <div className="bg-[#1E293B] text-white p-6 rounded-b-[40px] shadow-lg shrink-0 z-10 relative overflow-hidden">
         <h1 className="text-xl font-black italic">نظام تعاقد "راحة" ✨</h1>
         <div className="flex gap-2 mt-3">
           {[1, 2, 3].map((s) => (
@@ -171,7 +205,7 @@ export default function RahaContract() {
                 {locating ? "جاري تحديد موقعك..." : "تحديد الموقع تلقائياً (GPS)"}
               </button>
 
-              <textarea value={profile.address} onChange={e => setProfile({...profile, address: e.target.value})} placeholder="وصف دقيق للموقع..." className="w-full p-4 rounded-2xl bg-slate-50 text-xs font-bold outline-none h-28 resize-none" />
+              <textarea value={profile.address} onChange={e => setProfile({...profile, address: e.target.value})} placeholder="وصف دقيق للموقع..." className="w-full p-4 rounded-2xl bg-slate-50 text-xs font-bold outline-none h-28 resize-none border focus:border-blue-400" />
             </div>
           </div>
         )}
@@ -300,3 +334,4 @@ export default function RahaContract() {
     </div>
   );
 }
+

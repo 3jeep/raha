@@ -1,45 +1,65 @@
 "use client";
 
+import React from 'react';
+
+// القائمة المحدثة: الآن الـ name يطابق الـ id تماماً لضمان الوضوح والمطابقة مع Firebase
+const professions = [
+  { id: "كهربائي", name: "كهربائي", icon: "⚡" },
+  { id: "سباك (مواسيرجي)", name: "سباك (مواسيرجي)", icon: "🚰" },
+  { id: "فني تكييف وتبريد", name: "فني تكييف وتبريد", icon: "❄️" },
+  { id: "توصيل طلبات (ركشة/موتر)", name: "توصيل طلبات (ركشة/موتر)", icon: "🛵" },
+  { id: "ممرض / ممرضة", name: "ممرض / ممرضة", icon: "🩺" },
+  { id: "فني غسالات", name: "فني غسالات", icon: "🧺" },
+  { id: "ميكانيكي", name: "ميكانيكي", icon: "🔧" },
+  { id: "عامل مساعد", name: "عامل مساعد", icon: "🧹" },
+  { id: "نقاش (بويجي)", name: "نقاش (بويجي)", icon: "🎨" },
+  { id: "نجار", name: "نجار", icon: "🪚" },
+  { id: "فني ستالايت (دش)", name: "فني ستالايت (دش)", icon: "📡" },
+  { id: "مبلط (سيراميك)", name: "مبلط (سيراميك)", icon: "🧱" },
+  { id: "حداد", name: "حداد", icon: "⚒️" },
+  { id: "بناء", name: "بناء", icon: "🏗️" },
+  { id: "مساعد بناء (طُلبة)", name: "مساعد بناء (طُلبة)", icon: "🧱" },
+  { id: "طباخ", name: "طباخ", icon: "👨‍🍳" },
+  { id: "حلاق (خدمة منزلية)", name: "حلاق (خدمة منزلية)", icon: "✂️" },
+  { id: "غسيل عربات", name: "غسيل عربات", icon: "🚿" },
+];
+
 interface ServiceSelectionProps {
-  onNext: (type: string) => void;
+  onSelectService: (service: string) => void;
 }
 
-export default function ServiceSelection({ onNext }: ServiceSelectionProps) {
+export default function ServiceSelection({ onSelectService }: ServiceSelectionProps) {
   return (
-    <div className="flex flex-col items-center p-4 bg-gray-50 min-h-[40vh] text-right" dir="rtl">
-      <h2 className="text-2xl font-bold text-blue-900 mb-8 border-b-2 border-blue-200 pb-2">اختر نوع الخدمة</h2>
-      
-      <div className="grid grid-cols-1 gap-5 w-full max-w-md">
-        
-        {/* خيار الزيارة المنفردة */}
-        <button 
-          onClick={() => onNext("single")}
-          className="bg-white border-2 border-blue-50 p-6 rounded-2xl shadow-sm hover:border-blue-500 hover:shadow-md transition-all flex justify-between items-center group active:scale-95"
-        >
-          <div className="flex-1 text-right">
-            <h3 className="font-bold text-lg text-gray-800">حجز زيارة منفردة</h3>
-            <p className="text-sm text-gray-500 mt-1">خدمة نظافة شاملة لمرة واحدة (4 ساعات)</p>
-          </div>
-          <div className="text-2xl font-bold text-blue-600 mr-4">←</div>
-        </button>
-
-        {/* خيار الزيارة المتعددة */}
-        <button 
-          onClick={() => onNext("multi")}
-          className="bg-white border-2 border-blue-50 p-6 rounded-2xl shadow-sm hover:border-blue-500 hover:shadow-md transition-all flex justify-between items-center group active:scale-95"
-        >
-          <div className="flex-1 text-right">
-            <h3 className="font-bold text-lg text-gray-800">حجز زيارة متعددة</h3>
-            <p className="text-sm text-gray-500 mt-1">نظام تعاقدات مرن (شهري، شهرين، 3 أشهر)</p>
-          </div>
-          <div className="text-2xl font-bold text-blue-600 mr-4">←</div>
-        </button>
-
+    <div className="p-4 bg-gray-50 min-h-screen" dir="rtl">
+      {/* رأس الصفحة */}
+      <div className="mb-8 mt-4 text-center">
+        <h1 className="text-2xl font-black text-gray-900 mb-2">منو المحتاج ليهو؟ ✨</h1>
+        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">اختر الحرفة لنريك الأقرب إليك</p>
       </div>
 
-      <p className="text-xs text-gray-400 mt-10 text-center italic">
-        * جميع خدماتنا تضمن لك أعلى معايير الجودة والأمان
-      </p>
+      {/* شبكة الحرفيين */}
+      <div className="grid grid-cols-3 gap-3 max-w-md mx-auto">
+        {professions.map((service) => (
+          <button
+            key={service.id}
+            onClick={() => onSelectService(service.id)} // إرسال الـ id المطابق للبيانات
+            className="flex flex-col items-center justify-center p-4 bg-white rounded-3xl border border-gray-100 shadow-sm active:scale-90 active:bg-gray-50 transition-all group"
+          >
+            <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">
+              {service.icon}
+            </span>
+            {/* النص الآن يظهر بالكامل كما هو في الـ ID */}
+            <span className="text-[10px] font-black text-gray-800 text-center leading-tight">
+              {service.name}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* رسالة توضيحية بسيطة */}
+      <div className="mt-10 text-center opacity-50">
+        <p className="text-[11px] font-bold text-gray-600">جميع الحرفيين في نطاق 20 كيلومتر</p>
+      </div>
     </div>
   );
 }

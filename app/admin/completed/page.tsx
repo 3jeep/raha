@@ -2,11 +2,12 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { 
-  collection, query, where, onSnapshot 
+  collection, query, where, onSnapshot, orderBy 
 } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-// استيراد الدوال الاحترافية من ملفك
-import { showToast, handleDelete, handleUpdate, getFromLocal, st } from "@/lib/utils";
+import { showToast, handleDelete, handleUpdate, getFromLocal } from "@/lib/utils";
+
+const ARABIC_DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
 export default function CompletedOrdersPage() {
   const [completedOrders, setCompletedOrders] = useState<any[]>([]);
@@ -16,13 +17,18 @@ export default function CompletedOrdersPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const router = useRouter();
 
-  // جلب رتبة المستخدم عند التحميل باستخدام دالتك المؤمنة
   useEffect(() => {
     const role = getFromLocal("userRole");
     setUserRole(role);
   }, []);
 
-  // --- دالة حساب الفرق الزمني (محسنة) ---
+  // دالة لجلب اسم اليوم باللغة العربية
+  const getDayName = (timestamp: any) => {
+    if (!timestamp) return "";
+    const date = timestamp.toDate();
+    return ARABIC_DAYS[date.getDay()];
+  };
+
   const calculateDuration = (start: any, end: any) => {
     if (!start || !end) return "توقيت غير مكتمل";
     const startMs = start.seconds * 1000;
@@ -41,7 +47,10 @@ export default function CompletedOrdersPage() {
   };
 
   useEffect(() => {
-    const q = query(collection(db, "bookings"), where("status", "==", "completed"));
+    const q = query(
+      collection(db, "bookings"), 
+      where("status", "in", ["completed", "completed_for_today", "contract_finished"])
+    );
 
     const unsub = onSnapshot(q, (snap) => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -62,11 +71,9 @@ export default function CompletedOrdersPage() {
     }
   }, [searchDate, completedOrders]);
 
-  // دالة الحذف المخصصة للأرشيف (لليوزر super)
   const confirmDelete = async (id: string) => {
     const success = await handleDelete("bookings", id);
     if (success) {
-      // التحديث اللحظي للواجهة
       setFilteredOrders(prev => prev.filter(o => o.id !== id));
       setCompletedOrders(prev => prev.filter(o => o.id !== id));
     }
@@ -106,9 +113,8 @@ export default function CompletedOrdersPage() {
             </div>
           ) : (
             filteredOrders.map((order) => (
-              <div key={order.id} className="bg-white rounded-[45px] p-8 shadow-sm border border-gray-50 relative overflow-hidden transition-all hover:shadow-xl group">
+              <div key={order.id} className={`bg-white rounded-[45px] p-8 shadow-sm border-2 relative overflow-hidden transition-all hover:shadow-xl group ${order.type === 'monthly_contract' ? 'border-blue-50' : 'border-gray-50'}`}>
                 
-                {/* زر المسح للمستخدم super فقط */}
                 {userRole === "super" && (
                   <button 
                     onClick={() => confirmDelete(order.id)}
@@ -120,10 +126,19 @@ export default function CompletedOrdersPage() {
 
                 <div className="flex justify-between items-start mb-6">
                   <div className={userRole === "super" ? "mr-10" : ""}>
-                    <h3 className="font-black text-gray-800 text-xl leading-none italic">{order.fullName || "عميل مجهول"}</h3>
+                    <div className="flex items-center gap-2">
+                       <h3 className="font-black text-gray-800 text-xl leading-none italic">{order.fullName || "عميل مجهول"}</h3>
+                       {/* عرض اليوم المكتمل */}
+                       <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-xl text-[10px] font-black italic shadow-sm">
+                         {getDayName(order.actualFinishedAt)}
+                       </span>
+                    </div>
+                    
                     <div className="flex flex-wrap items-center gap-2 mt-3">
-                        <span className="bg-green-50 text-green-600 px-4 py-1 rounded-full text-[9px] font-black border border-green-100 shadow-sm">مكتمل بنجاح ✅</span>
-                        <span className="bg-blue-50 text-blue-600 px-4 py-1 rounded-full text-[9px] font-black border border-blue-100 italic">{order.packageName}</span>
+                        <span className={`px-4 py-1 rounded-full text-[9px] font-black border shadow-sm ${order.status === 'completed' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-blue-600 text-white border-blue-700'}`}>
+                          {order.status === 'completed' ? 'مكتمل بنجاح ✅' : 'زيارة عقد مكتملة 🗓️'}
+                        </span>
+                        <span className="bg-gray-50 text-gray-500 px-4 py-1 rounded-full text-[9px] font-black border border-gray-100 italic">{order.type === 'monthly_contract' ? 'عقد شهري' : (order.packageName || 'طلب عابر')}</span>
                     </div>
                   </div>
                   <div className="text-left">
@@ -160,7 +175,6 @@ export default function CompletedOrdersPage() {
                   </div>
                   <div className="text-center border-l border-gray-200">
                     <p className="text-[8px] text-gray-400 font-black mb-1 uppercase">🚐 السائق</p>
-                    {/* حل مشكلة الحرف الصغير والكبير في قاعدة البيانات */}
                     <p className="text-[10px] font-black text-gray-800">{order.assignedVehicle || order.AssignedVehicle || "---"}</p>
                   </div>
                   <div className="text-center">

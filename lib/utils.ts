@@ -1,5 +1,5 @@
 // lib/utils.ts
-import { db } from "./firebase"; 
+import { db, app } from "./firebase"; 
 import { 
   collection, 
   addDoc, 
@@ -12,28 +12,23 @@ import {
   orderBy, 
   serverTimestamp 
 } from "firebase/firestore";
+import { getMessaging, getToken } from "firebase/messaging";
 
 /**
  * 0. اختصارات وحماية البيانات (Storage & Constants)
  */
-
-// اختصار للوقت الخاص بفايربيس لاستخدامه في الصفحات بسهولة
 export const st = serverTimestamp();
 
-// دالة جلب البيانات من التخزين المحلي مع حماية من أخطاء الـ SSR في Next.js
 export const getFromLocal = (key: string) => {
   if (typeof window === "undefined") return null;
   const item = localStorage.getItem(key);
   try {
-    // محاولة تحويل النص إلى كائن إذا كان مخزناً كـ JSON
     return item ? JSON.parse(item) : null;
   } catch (e) {
-    // إذا لم يكن JSON (نص عادي مثل "super") ارجعه كما هو
     return item;
   }
 };
 
-// دالة حفظ البيانات في التخزين المحلي
 export const saveToLocal = (key: string, value: any) => {
   if (typeof window === "undefined") return;
   const data = typeof value === 'string' ? value : JSON.stringify(value);
@@ -63,16 +58,15 @@ export const showToast = (message: string, type: 'success' | 'error' | 'info' = 
 
   setTimeout(() => {
     toast.style.opacity = "0";
-    toast.style.transform = "translate(-50%, 20px)";
+    toast.style.transform = "translate(-50%, 40px)";
     toast.style.transition = "all 0.5s ease";
     setTimeout(() => { if (document.body.contains(toast)) document.body.removeChild(toast); }, 500);
-  }, 5000);
+  }, 3000);
 };
 
 /**
  * 2. عمليات الفايربيس (Firebase CRUD)
  */
-
 export const fetchData = async (collectionName: string, filterField?: string, filterValue?: any) => {
   try {
     let q = query(collection(db, collectionName), orderBy("createdAt", "desc"));
@@ -91,7 +85,7 @@ export const handleSave = async (collectionName: string, data: any) => {
   try {
     const docRef = await addDoc(collection(db, collectionName), {
       ...data,
-      createdAt: st, // استخدام الاختصار
+      createdAt: st,
     });
     showToast("تم الحفظ بنجاح");
     return docRef.id;
@@ -106,7 +100,7 @@ export const handleUpdate = async (collectionName: string, id: string, newData: 
     const docRef = doc(db, collectionName, id);
     await updateDoc(docRef, {
       ...newData,
-      updatedAt: st, // استخدام الاختصار
+      updatedAt: st,
     });
     showToast("تم التحديث بنجاح");
     return true;
@@ -117,7 +111,7 @@ export const handleUpdate = async (collectionName: string, id: string, newData: 
 };
 
 export const handleDelete = async (collectionName: string, id: string) => {
-  if (!confirm("هل أنت متأكد من قرار الحذف؟")) return false;
+  if (typeof window !== "undefined" && !confirm("هل أنت متأكد من قرار الحذف؟")) return false;
   try {
     await deleteDoc(doc(db, collectionName, id));
     showToast("تم الحذف بنجاح");
@@ -131,12 +125,12 @@ export const handleDelete = async (collectionName: string, id: string) => {
 /**
  * 3. خدمات الموقع الجغرافي والخرائط (GPS & Maps)
  */
-
 export const getCurrentGPSLocation = (): Promise<{ lat: number; lng: number }> => {
   return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
+    if (typeof window === "undefined" || !navigator.geolocation) {
       showToast("المتصفح لا يدعم تحديد الموقع", "error");
       reject("Not supported");
+      return;
     }
     showToast("جاري تحديد موقعك الحالي...", "info");
     navigator.geolocation.getCurrentPosition(
@@ -146,15 +140,17 @@ export const getCurrentGPSLocation = (): Promise<{ lat: number; lng: number }> =
         resolve(location);
       },
       (err) => {
-        showToast("فشل تحديد الموقع، تلقائياً ، أدخِل عنوانك يدوياً", "error");
+        showToast("فشل تحديد الموقع، أدخِل عنوانك يدوياً", "error");
         reject(err);
-      }
+      },
+      { enableHighAccuracy: true } // تحسين الدقة
     );
   });
 };
 
 export const openInGoogleMaps = (loc: { lat: number; lng: number } | null) => {
   if (loc && loc.lat && loc.lng) {
+    // تصحيح الرابط ليعمل بشكل صحيح عالمياً
     window.open(`https://www.google.com/maps?q=${loc.lat},${loc.lng}`, "_blank");
   } else {
     showToast("الموقع الجغرافي غير متوفر لهذا السجل", "error");
@@ -164,7 +160,6 @@ export const openInGoogleMaps = (loc: { lat: number; lng: number } | null) => {
 /**
  * 4. أدوات التحقق والتعامل مع المستخدم (UX Helpers)
  */
-
 export const isValidSudanesePhone = (phone: string) => {
   const regex = /^(249[19]\d{8}|0[19]\d{8})$/;
   if (!regex.test(phone)) {
@@ -205,4 +200,50 @@ export const contactWhatsApp = (phone: string, message: string = "") => {
   
   const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
   window.open(url, '_blank');
+};
+
+/**
+ * 5. نظام الإشعارات الفورية (Push Notifications)
+ */
+export const getFCMToken = async () => {
+  if (typeof window === "undefined" || !('Notification' in window)) return null;
+
+  try {
+    const messaging = getMessaging(app);
+    
+    // طلب الإذن إذا لم يكن ممنوحاً مسبقاً
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
+    }
+
+    if (permission !== 'granted') {
+      console.log("إذن الإشعارات مرفوض");
+      return null;
+    }
+
+    // جلب التوكن باستخدام مفتاح VAPID
+    const token = await getToken(messaging, { 
+      vapidKey: "BOfHELSplTWlJ0tNuqx4sBQknMJIUE9pwI-rXnp2Hrl78p3_fuWzioJqQh14sVznCvAvSQUjHqu74jGzTpSPaUw" 
+    });
+
+    return token || null;
+  } catch (error) {
+    console.error("Error fetching FCM token:", error);
+    return null;
+  }
+};
+
+export const sendPushNotification = async (targetToken: string, title: string, body: string, url: string = "/") => {
+  if (!targetToken) return;
+  try {
+    const res = await fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: targetToken, title, body, url })
+    });
+    return await res.json();
+  } catch (error) {
+    console.error("Notification API Error:", error);
+  }
 };

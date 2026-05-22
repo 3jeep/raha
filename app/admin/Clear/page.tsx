@@ -151,6 +151,13 @@ export default function SuperAdminClearPage() {
             <button onClick={() => clearCollection("laundry_orders", { field: "status", value: "completed" })} className="w-full py-4 bg-gray-50 text-gray-400 rounded-2xl text-[10px] font-black">حذف أرشيف الغسيل 📦</button>
           </div>
 
+          {/* قسم الإشعارات - الإضافة الجديدة */}
+          <div className="bg-white p-6 rounded-[35px] shadow-sm space-y-3 border border-gray-100 border-r-8 border-r-yellow-500">
+            <h4 className="font-black text-xs text-yellow-900 mb-2 italic">قسم الإشعارات (Notifications)</h4>
+            <button onClick={() => clearCollection("notifications")} className="w-full py-4 bg-yellow-50 text-yellow-700 rounded-2xl text-[10px] font-black hover:bg-yellow-100 transition-all">حذف كافة الإشعارات بالكامل 🔔</button>
+            <p className="text-[7px] text-gray-400 text-center font-bold italic">سيتم مسح سجلات الإشعارات لجميع المستخدمين</p>
+          </div>
+
           {/* قسم المستخدمين */}
           <div className="bg-white p-6 rounded-[35px] shadow-sm space-y-3 border border-gray-100 border-r-8 border-r-red-600">
             <h4 className="font-black text-xs text-red-900 mb-2 italic">المستخدمين (Users)</h4>

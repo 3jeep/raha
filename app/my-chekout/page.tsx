@@ -1,13 +1,63 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { db, auth } from "@/lib/firebase";
 import { 
-  collection, query, where, onSnapshot, orderBy, getDocs, doc, updateDoc 
+  collection, query, where, onSnapshot, orderBy, getDocs, doc, updateDoc, serverTimestamp 
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { showToast, handleDelete, formatSDG } from "@/lib/utils";
+// استيراد getFCMToken لربط الإشعارات
+import { showToast, handleDelete, formatSDG, getFCMToken } from "@/lib/utils";
+
+// --- 1. تعريف شريط التنقل السفلي الموحد (مثل الرئيسية والبروفايل) ---
+const BottomNav = lazy(() => Promise.resolve({ default: () => {
+  const pathname = usePathname();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (user) => setCurrentUser(user || null));
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const qNoti = query(
+      collection(db, "notifications"), 
+      where("userId", "==", currentUser.uid),
+      where("isRead", "==", false)
+    );
+    const unsubNoti = onSnapshot(qNoti, (snap) => setUnreadNotificationsCount(snap.size));
+    return () => unsubNoti();
+  }, [currentUser]);
+
+  if (!currentUser) return null;
+
+  const navItems = [
+    { name: "الرئيسية", icon: "🏠", path: "/" },
+    { name: "طلباتي", icon: "📋", path: "/my-chekout" },
+    { name: "الإشعارات", icon: "🔔", path: "/notifications" },
+    { name: "العروض", icon: "🏷️", path: "/packages" },
+    { name: "حسابي", icon: "👤", path: "/profile" },
+  ];
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 w-full bg-[#1E293B] h-16 shadow-2xl flex items-center justify-around px-2 z-50 border-t-2 border-r-2 border-l-2 border-[#1E293B] rounded-t-[25px]">
+      {navItems.map((item) => (
+        <Link key={item.path} href={item.path} className={`flex flex-col items-center relative transition-all ${pathname === item.path ? 'scale-110 opacity-100' : 'opacity-50'}`}>
+          {item.path === "/notifications" && unreadNotificationsCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-lg border border-[#1E293B] animate-bounce">
+              {unreadNotificationsCount}
+            </span>
+          )}
+          <span className="text-xl">{item.icon}</span>
+          <span className="text-[8px] font-black text-white mt-1 uppercase">{item.name}</span>
+        </Link>
+      ))}
+    </div>
+  );
+}}));
 
 function CountdownTimer({ startTime, totalHours }: { startTime: any, totalHours: number }) {
   const [timeLeft, setTimeLeft] = useState("");
@@ -38,16 +88,27 @@ export default function MyCheckoutPage() {
   const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [expandedOrder, setExpandedOrder] = useState<string | null>(null); 
-  const [visitHistory, setVisitHistory] = useState<any[]>([]);
   
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) setCurrentUser(user);
-      else router.push("/login");
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setCurrentUser(user);
+        try {
+          const token = await getFCMToken();
+          if (token) {
+            await updateDoc(doc(db, "users", user.uid), {
+              fcmToken: token,
+              lastSeenAt: serverTimestamp()
+            } as any);
+          }
+        } catch (e) {
+          console.log("FCM update skipped");
+        }
+      } else {
+        router.push("/login");
+      }
     });
     return () => unsubscribe();
   }, [router]);
@@ -129,9 +190,9 @@ export default function MyCheckoutPage() {
   if (loading) return <div className="h-screen flex items-center justify-center font-black opacity-30 italic">جاري جلب بياناتك الرقمية...</div>;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-32 text-right font-sans" dir="rtl">
+    <div className="min-h-screen bg-[#F8FAFC] pb-40 text-right font-sans" dir="rtl">
       
-      <div className="bg-[#1E293B] p-8 rounded-b-[50px] shadow-2xl text-white mb-8 border-b-4 border-blue-600">
+      <div className="bg-[#1E293B] p-8 rounded-b-[50px] shadow-2xl text-white mb-8 border-b-4 border-blue-600 relative overflow-hidden">
         <h1 className="text-2xl font-black italic">سجل طلباتي</h1>
         <p className="text-blue-400 text-[10px] font-bold mt-1 uppercase tracking-widest italic">Raha Dashboard</p>
       </div>
@@ -221,13 +282,6 @@ export default function MyCheckoutPage() {
                 </div>
               )}
 
-              {isFullDone && (order.signature || order.customerSignature) && (
-                <div className="mt-4 p-4 bg-white rounded-3xl border border-gray-50 text-center shadow-inner">
-                  <p className="text-[7px] text-gray-300 font-black mb-1 uppercase italic">توقيع الاستلام</p>
-                  <img src={order.signature || order.customerSignature} className="h-10 mx-auto mix-blend-multiply opacity-40 grayscale" alt="Sign" />
-                </div>
-              )}
-
               <div className="flex justify-between items-center px-2 pt-6 mt-4 border-t border-gray-50">
                 <div className="flex gap-2">
                    <p className="text-[9px] text-gray-300 font-black italic uppercase">ID: {order.id.slice(0,8)}</p>
@@ -247,18 +301,7 @@ export default function MyCheckoutPage() {
         })}
       </div>
 
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-[#1E293B]/95 backdrop-blur-md h-16 rounded-[25px] flex items-center justify-around px-6 z-50 border border-white/10">
-        {[
-          { n: "الرئيسية", i: "🏠", p: "/" }, 
-          { n: "طلباتي", i: "📋", p: "/my-chekout" }, 
-          { n: "حسابي", i: "👤", p: "/profile" }
-        ].map((item) => (
-          <Link key={item.p} href={item.p} className={`flex flex-col items-center transition-all ${pathname === item.p ? 'opacity-100 scale-110' : 'opacity-40'}`}>
-            <span className="text-xl">{item.i}</span>
-            <span className="text-[8px] font-black text-white mt-1">{item.n}</span>
-          </Link>
-        ))}
-      </div>
+      <Suspense fallback={null}><BottomNav /></Suspense>
     </div>
   );
 }

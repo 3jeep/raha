@@ -8,8 +8,10 @@ import {
   User, MapPin, Loader2, ClipboardCheck, 
   Truck, PhoneCall, Info, CheckCircle2 
 } from "lucide-react";
-// استيراد الدوال المختصرة من ملفك
-import { showToast, runSafe, getCurrentGPSLocation, isValidSudanesePhone, formatSDG } from "@/lib/utils";
+// استيراد الدوال المختصرة وجلب التوكن
+import { showToast, runSafe, getCurrentGPSLocation, isValidSudanesePhone, formatSDG, getFCMToken } from "@/lib/utils";
+// استيراد دالة الإشعارات الذكية من ملفك
+import { sendSmartNotification } from "@/utils/notif-logic";
 
 export default function LaundryCheckout() {
   const router = useRouter();
@@ -98,10 +100,20 @@ export default function LaundryCheckout() {
 
   const handleSubmitOrder = async () => {
     await runSafe(setIsSubmitting, async () => {
-      await addDoc(collection(db, "laundry_orders"), {
+      // 1. جلب توكن الإشعارات
+      let token = null;
+      try {
+        token = await getFCMToken();
+      } catch (e) {
+        console.log("FCM Token skipped or denied");
+      }
+
+      // 2. حفظ طلب الغسيل في Firestore
+      const docRef = await addDoc(collection(db, "laundry_orders"), {
         orderNumber: Math.floor(1000 + Math.random() * 9000),
         userId,
         userName: fullName,
+        fcmToken: token, // حفظ التوكن للإشعارات اللاحقة
         pieces,
         serviceType,
         totalPrice,
@@ -112,6 +124,28 @@ export default function LaundryCheckout() {
         isRated: false,
         createdAt: serverTimestamp(),
       });
+
+      // 3. إرسال إشعار فوري للأدمن (بوجود طلب غسيل جديد)
+      await sendSmartNotification('admin', 'new-order', {
+        title: "طلب غسيل جديد 🧺",
+        body: `وصل طلب جديد من ${fullName} بقيمة ${totalPrice} ج.س`,
+        customerName: fullName,
+        orderId: docRef.id,
+        userId: userId || ""
+      });
+
+      // 4. إرسال إشعار تأكيد للعميل (بواسطة النظام الذكي)
+      if (token || userId) {
+        await sendSmartNotification('user', 'pending', {
+          userId: userId || "",
+          token: token,
+          customerName: fullName,
+          orderId: docRef.id,
+          title: "تم استلام طلبك 🧺",
+          body: "شكراً لاختيارك راحة، طلبك الآن في مرحلة الانتظار وسيتم التواصل معك قريباً."
+        });
+      }
+
       showToast("🚀 تم إرسال طلب الغسيل بنجاح!");
       router.push("/my-chekout");
     });

@@ -9,7 +9,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { 
   User, Calendar, MapPin, CheckCircle2, Loader2, Info, Clock, ArrowRight
 } from "lucide-react";
-import { showToast, runSafe, getCurrentGPSLocation, isValidSudanesePhone } from "@/lib/utils";
+// إضافة getFCMToken للمستوردات
+import { showToast, runSafe, getCurrentGPSLocation, isValidSudanesePhone, getFCMToken } from "@/lib/utils"; 
+// استيراد دالة الإشعارات الذكية
+import { sendSmartNotification } from "@/utils/notif-logic";
 
 function CheckoutContent() {
   const router = useRouter();
@@ -51,7 +54,6 @@ function CheckoutContent() {
     
     const fetchInitialData = async () => {
       try {
-        // جلب بيانات العرض
         const pkgSnap = await getDoc(doc(db, "packages", pkgId));
         if (pkgSnap.exists()) {
           const data = pkgSnap.data();
@@ -64,11 +66,9 @@ function CheckoutContent() {
           }));
         }
 
-        // جلب عدد العاملات للتحقق من التوفر
         const maidsSnap = await getDocs(collection(db, "maids"));
         setTotalMaidsCount(maidsSnap.size);
 
-        // مراقبة أيام الإغلاق من الإدارة
         onSnapshot(doc(db, "settings", "availability"), (docSnap) => {
           if (docSnap.exists()) setAdminFullDays(docSnap.data().fullDays || []);
         });
@@ -85,16 +85,21 @@ function CheckoutContent() {
       }
       setUser(currentUser);
       
-      const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        setFormData(prev => ({
-          ...prev,
-          fullName: data.fullName || "",
-          phone: data.phone || "",
-          locationText: data.address || ""
-        }));
+      try {
+        const uSnap = await getDoc(doc(db, "users", currentUser.uid));
+        if (uSnap.exists()) {
+          const data = uSnap.data();
+          setFormData(prev => ({
+            ...prev,
+            fullName: data.fullName || "",
+            phone: data.phone || "",
+            locationText: data.address || ""
+          }));
+        }
+      } catch (error) {
+        console.error("User data fetch error:", error);
       }
+
       setLoading(false);
     });
 
@@ -102,7 +107,6 @@ function CheckoutContent() {
     return () => unsubscribeAuth();
   }, [pkgId, router]);
 
-  // فحص التوفر عند تغيير التاريخ
   useEffect(() => {
     const checkAvailability = async () => {
       if (formData.startDate) {
@@ -140,13 +144,41 @@ function CheckoutContent() {
     if (!isValidSudanesePhone(formData.phone)) return;
 
     await runSafe(setIsSubmitting, async () => {
-      await addDoc(collection(db, "bookings"), {
+      // 1. جلب توكن الإشعارات
+      let token = null;
+      try {
+        token = await getFCMToken();
+      } catch (e) {
+        console.log("Notification token skipped or denied");
+      }
+
+      // 2. حفظ الحجز في Firestore
+      const docRef = await addDoc(collection(db, "bookings"), {
         ...formData,
         userId: user.uid,
         email: user.email, 
+        fcmToken: token, // حفظ التوكن في المستند
         createdAt: serverTimestamp(),
         totalHours: Number(pkg?.totalHours || pkg?.hours || 4),
       });
+
+      // 3. إرسال إشعار فوري للأدمن والمشرفين
+      await sendSmartNotification('admin', 'new-order-admin', {
+        customerName: formData.fullName,
+        orderId: docRef.id,
+        userId: user.uid
+      });
+
+      // 4. إرسال إشعار تأكيد للعميل (بناءً على حالة pending)
+      if (token) {
+        await sendSmartNotification('user', 'pending', {
+          customerName: formData.fullName,
+          orderId: docRef.id,
+          userId: user.uid,
+          token: token
+        });
+      }
+
       showToast("🚀 تم حجز موعدك بنجاح!");
       router.replace("/my-chekout");
     });
@@ -162,7 +194,6 @@ function CheckoutContent() {
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans text-right" dir="rtl">
       
-      {/* Header الثابت (نفس استايل المتعددة) */}
       <div className="bg-[#1E293B] text-white p-6 rounded-b-[40px] shadow-lg shrink-0 z-10 relative overflow-hidden">
         <div className="relative z-10">
             <h1 className="text-xl font-black italic">طلب زيارة مفردة ✨</h1>
@@ -176,12 +207,10 @@ function CheckoutContent() {
         <div className="absolute top-[-20px] left-[-20px] w-32 h-32 bg-blue-500/10 rounded-full blur-3xl"></div>
       </div>
 
-      {/* المحتوى القابل للتمرير */}
       <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
         
         {step === 1 && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* بطاقة السعر */}
             <div className="bg-white p-6 rounded-[35px] border border-slate-200 shadow-sm flex justify-between items-center">
                 <div>
                     <span className="text-[10px] font-black text-slate-400 block italic uppercase">تكلفة الخدمة</span>
@@ -192,7 +221,6 @@ function CheckoutContent() {
                 </div>
             </div>
 
-            {/* بيانات العميل */}
             <div className="bg-white p-6 rounded-[35px] border border-slate-200 shadow-sm space-y-4">
               <h3 className="font-black text-xs flex items-center gap-2 text-slate-800 italic"> <User size={16} className="text-blue-600"/> البيانات الأساسية</h3>
               
@@ -250,7 +278,6 @@ function CheckoutContent() {
         )}
       </div>
 
-      {/* الفوتر الثابت (نفس استايل المتعددة) */}
       <div className="bg-white p-6 rounded-t-[45px] shadow-[0_-15px_40px_rgba(0,0,0,0.08)] border-t border-slate-100 shrink-0 z-20">
         <div className="flex gap-2">
             {step > 1 && (

@@ -4,9 +4,10 @@ import {
   getFirestore, 
   initializeFirestore, 
   persistentLocalCache, 
-  persistentMultipleTabManager,
-  terminate // أضفنا هذه للحماية
+  persistentMultipleTabManager 
 } from "firebase/firestore";
+// استيراد أداة الإشعارات
+import { getMessaging } from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCAR8E5kXtOGKLHnN-GuypIPp2G-MmUl6c",
@@ -18,14 +19,15 @@ const firebaseConfig = {
 };
 
 // 1. تهيئة التطبيق (منع التكرار)
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+// أضفنا export هنا لحل مشكلة الـ utils.ts
+export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// 2. تهيئة Firestore مع دعم العمل بدون إنترنت (Offline Support)
+// 2. تهيئة Firestore و الـ Messaging
 let db;
+let messaging;
 
 if (typeof window !== "undefined") {
-    // التحقق مما إذا كان قد تم تهيئة Firestore مسبقاً لمنع خطأ الـ Re-initialization
-    // نستخدم النسخة المخزنة في الـ window أو نهيئ واحدة جديدة
+    // تهيئة Firestore مع دعم الـ Offline
     if (!global.firestoreDb) {
         global.firestoreDb = initializeFirestore(app, {
             localCache: persistentLocalCache({
@@ -34,13 +36,22 @@ if (typeof window !== "undefined") {
         });
     }
     db = global.firestoreDb;
+
+    // تهيئة الإشعارات فقط في المتصفح
+    try {
+        messaging = getMessaging(app);
+    } catch (err) {
+        console.log("Messaging not supported in this browser:", err);
+    }
 } else {
-    // في جانب السيرفر (Next.js Server Side)
+    // في جانب السيرفر
     db = getFirestore(app);
 }
 
 // 3. تصدير الأدوات
-export { db };
+export { db, messaging }; 
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// الحفاظ على التصدير الافتراضي أيضاً لزيادة التوافق
 export default app;

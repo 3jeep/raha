@@ -4,6 +4,7 @@ import withPWAInit from "@ducanh2912/next-pwa";
 const nextConfig = {
   reactStrictMode: true,
 
+  // الإعدادات مجمعة بشكل صحيح داخل nextConfig
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -22,7 +23,6 @@ const nextConfig = {
   webpack: (config, { dev }) => {
     if (!dev) {
       config.cache = false;
-      // قمنا بحذف تعطيل الـ minimize هنا للسماح بضغط ملفات النظام الأساسية فقط
     }
     return config;
   },
@@ -37,11 +37,10 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: false, 
   aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
-  swcMinify: true, // تفعيل هذا الخيار ضروري جداً لتعريف الـ PWA بشكل صحيح
+  swcMinify: true,
   
   workboxOptions: {
     disableDevLogs: true,
-    // تم تبسيط الكاش لضمان عدم حدوث تعارض يمنع التثبيت
     runtimeCaching: [
       {
         urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
@@ -58,7 +57,6 @@ const withPWA = withPWAInit({
           },
         },
       },
-      // إضافة كاش افتراضي لبقية الملفات لضمان عمل التطبيق Offline وهو شرط للتثبيت
       {
         urlPattern: /.*/i,
         handler: 'StaleWhileRevalidate',

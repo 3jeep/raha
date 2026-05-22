@@ -1,78 +1,125 @@
 "use client";
-import { useState, useEffect, Suspense, lazy } from "react";
+
+import { useState, useEffect, Suspense, lazy, useMemo } from "react";
 import { db, auth } from "@/lib/firebase";
 import { 
-  collection, query, where, getDocs, doc, getDoc, onSnapshot, orderBy 
+  collection, query, where, getDocs, doc, getDoc, onSnapshot 
 } from "firebase/firestore";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 
-// --- 1. تعريف شريط التنقل السفلي (BottomNav) خارج المكون الرئيسي لمنع الأخطاء ---
+// --- 1. شريط التنقل السفلي الاحترافي المصمم بأبعاد ثابتة ومطابق للصفحات الأصلية ---
 const BottomNav = lazy(() => Promise.resolve({ default: () => {
   const pathname = usePathname();
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeOrdersCount, setActiveOrdersCount] = useState(0);
-  const [hasInProgress, setHasInProgress] = useState(false);
+  const [isProfileIncomplete, setIsProfileIncomplete] = useState(false);
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (user) => { if (user) setCurrentUser(user); });
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user || null);
+      if (user) {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          const isIncomplete = !userData.fullName || !userData.phone || !userData.region || !userData.address || !userData.gender;
+          setIsProfileIncomplete(isIncomplete);
+        }
+      }
+    });
     return () => unsubAuth();
   }, []);
 
-  useEffect(() => {
-    if (!currentUser) return;
-    const qCleaning = query(collection(db, "bookings"), where("userId", "==", currentUser.uid));
-    const qLaundry = query(collection(db, "laundry_orders"), where("userId", "==", currentUser.uid));
-    const unsubCleaning = onSnapshot(qCleaning, (snap1) => {
-      const cleaning = snap1.docs.map(d => d.data());
-      const unsubLaundry = onSnapshot(qLaundry, (snap2) => {
-        const laundry = snap2.docs.map(d => d.data());
-        const combined = [...cleaning, ...laundry];
-        const active = combined.filter((o: any) => ["pending", "received", "in-progress"].includes(o.status));
-        setActiveOrdersCount(active.length);
-        setHasInProgress(active.some((o: any) => o.status === "in-progress"));
-      });
-    });
-  }, [currentUser]);
+  if (!currentUser) return null;
 
   const navItems = [
-    { name: "العروض", icon: "🏠", path: "/" },
-    { name: "طلباتي", icon: "📋", path: "/my-chekout" },
-    { name: "حسابي", icon: "👤", path: "/profile" },
+    { name: "الرئيسية", icon: "🏠", path: "/" },
+    { name: "طلباتي", icon: "📋", path: "/my-bookings" }, 
+    { name: "العروض", icon: "🏷️", path: "/packages" },
+    { name: "حسابي", icon: "👤", path: "/profile", hasDot: isProfileIncomplete },
   ];
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-md bg-[#1E293B] h-16 rounded-[25px] shadow-2xl flex items-center justify-around px-6 z-50 border border-white/20">
+    <div className="fixed bottom-0 left-0 right-0 w-full bg-[#1E293B] h-20 shadow-2xl flex items-center justify-around px-2 z-50 rounded-t-[35px]">
       {navItems.map((item) => (
-        <Link key={item.path} href={item.path} className={`flex flex-col items-center relative transition-all ${pathname === item.path ? 'scale-110 opacity-100' : 'opacity-50'}`}>
-          {item.path === "/my-chekout" && activeOrdersCount > 0 && (
-            <span className={`absolute -top-1 -right-1 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-lg border border-[#1E293B] animate-pulse ${hasInProgress ? 'bg-yellow-400' : 'bg-red-500'}`}>
-              {activeOrdersCount}
-            </span>
+        <Link key={item.path} href={item.path} className={`flex flex-col items-center relative transition-all ${pathname === item.path ? 'scale-110 opacity-100 text-blue-400' : 'opacity-40 text-white'}`}>
+          <span className="text-xl mb-1">{item.icon}</span>
+          <span className="text-[10px] font-bold">{item.name}</span>
+          {item.hasDot && (
+            <span className="absolute top-0 right-2 w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
           )}
-          <span className="text-xl">{item.icon}</span>
-          <span className="text-[9px] font-black text-white mt-1 uppercase">{item.name}</span>
         </Link>
       ))}
     </div>
   );
 }}));
 
+// --- 2. مكون الصفحة الرئيسية الشامل والمطابق تماماً لروابط وأبعاد كود الفلاتر الأصلي ---
 export default function WelcomePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [specialPackages, setSpecialPackages] = useState<any[]>([]);
   const [laundryPrices, setLaundryPrices] = useState<any>(null);
   const [cleaningPrices, setCleaningPrices] = useState<any>(null); 
+  const [officialSinglePrice, setOfficialSinglePrice] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminType, setAdminType] = useState<string | null>(null);
+  const [isProfileIncomplete, setIsProfileIncomplete] = useState(false);
   const [completedVisitsCount, setCompletedVisitsCount] = useState(0);
   const [isNavigating, setIsNavigating] = useState(false);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
-  // --- التحقق من الصلاحيات وتاريخ الزيارات ---
+  useEffect(() => {
+    const cachedCleaning = localStorage.getItem("cached_cleaning_prices");
+    const cachedLaundry = localStorage.getItem("cached_laundry_prices");
+    const cachedRole = localStorage.getItem("userRole");
+    const cachedAdminType = localStorage.getItem("adminType");
+
+    if (cachedCleaning) {
+      const parsed = JSON.parse(cachedCleaning);
+      setCleaningPrices(parsed);
+      setOfficialSinglePrice(Number(parsed?.single_price || 0));
+    }
+    if (cachedLaundry) setLaundryPrices(JSON.parse(cachedLaundry));
+    if (cachedRole === "admin" || cachedRole === "manager" || cachedAdminType) {
+      setIsAdmin(true);
+      setAdminType(cachedAdminType);
+    }
+  }, []);
+
+  useEffect(() => {
+    const fetchStaticData = async () => {
+      try {
+        setLoading(true);
+        const qSpecial = query(collection(db, "packages"), where("showIn", "==", "special"));
+        const [laundrySnap, cleaningSnap, specialSnap] = await Promise.all([
+          getDoc(doc(db, "settings", "laundry_prices")),
+          getDoc(doc(db, "settings", "cleaning_prices")),
+          getDocs(qSpecial)
+        ]);
+        
+        if (laundrySnap.exists()) {
+          setLaundryPrices(laundrySnap.data());
+          localStorage.setItem("cached_laundry_prices", JSON.stringify(laundrySnap.data()));
+        }
+        if (cleaningSnap.exists()) {
+          setCleaningPrices(cleaningSnap.data());
+          setOfficialSinglePrice(Number(cleaningSnap.data()?.single_price || 0));
+          localStorage.setItem("cached_cleaning_prices", JSON.stringify(cleaningSnap.data()));
+        }
+        setSpecialPackages(specialSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (e) { 
+        console.error("Data fetching error:", e); 
+      } finally { 
+        setLoading(false); 
+      }
+    };
+    fetchStaticData();
+  }, []);
+
   useEffect(() => {
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
@@ -80,221 +127,352 @@ export default function WelcomePage() {
       setShowInstallBtn(true);
     });
 
-    return onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
-        // جلب بيانات المستخدم للتحقق من زر الإشراف
-        const userDoc = await getDoc(doc(db, "users", user.uid));
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        const userRef = doc(db, "users", currentUser.uid);
+        const qOrders = query(collection(db, "bookings"), where("userId", "==", currentUser.uid), where("status", "==", "completed"));
+        
+        const [userDoc, ordersSnap] = await Promise.all([
+          getDoc(userRef),
+          getDocs(qOrders)
+        ]);
+
         if (userDoc.exists()) {
-          const role = userDoc.data().role;
-          if (role === "admin" || role === "manager") setIsAdmin(true);
+          const userData = userDoc.data();
+          const role = userData.role;
+          const aType = userData.adminType;
+
+          localStorage.setItem("userRole", role);
+          if (aType) localStorage.setItem("adminType", aType);
+
+          if (role === "admin" || role === "manager" || aType === "super" || aType === "cleaning" || aType === "laundry") {
+            setIsAdmin(true);
+            setAdminType(aType || "super");
+          } else {
+            setIsAdmin(false);
+            setAdminType(null);
+          }
+
+          if (!userData.fullName || !userData.phone || !userData.region || !userData.address || !userData.gender) {
+            setIsProfileIncomplete(true);
+          } else {
+            setIsProfileIncomplete(false);
+          }
+        } else {
+          setIsProfileIncomplete(true);
         }
 
-        // جلب تاريخ الزيارات المكتملة لفتح العروض الخاصة
-        const qClean = query(collection(db, "bookings"), where("userId", "==", user.uid), where("status", "==", "completed"));
-        const snap = await getDocs(qClean);
-        setCompletedVisitsCount(snap.size);
+        setCompletedVisitsCount(ordersSnap.size);
+
+        const qNoti = query(collection(db, "users", currentUser.uid, "notifications"), where("isRead", "==", false));
+        const unsubNoti = onSnapshot(qNoti, (snap) => setUnreadNotificationsCount(snap.size));
+        
+        listenToLiveOrders(userDoc.exists() ? userDoc.data().adminType : null, currentUser.uid);
+      } else {
+        localStorage.removeItem("userRole");
+        localStorage.removeItem("adminType");
+        setIsAdmin(false);
+        setAdminType(null);
+        setIsProfileIncomplete(false);
       }
     });
+    return () => unsubscribe();
   }, []);
 
-  // --- جلب الإعدادات والأسعار من Firestore ---
-  useEffect(() => {
-    const fetchAllData = async () => {
-      try {
-        const qSpecial = query(collection(db, "packages"), where("showIn", "==", "special"));
-        const [laundryDoc, cleaningDoc, snapSpecial] = await Promise.all([
-          getDoc(doc(db, "settings", "laundry_prices")),
-          getDoc(doc(db, "settings", "cleaning_prices")),
-          getDocs(qSpecial)
-        ]);
+  const listenToLiveOrders = (aType: string | null, userId: string) => {
+    const screenInitTime = new Date();
+
+    onSnapshot(collection(db, "bookings"), (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        const data = change.doc.data();
+        if (!data) return;
+        const timeStamp = change.type === "added" ? data.createdAt : data.updatedAt;
         
-        setSpecialPackages(snapSpecial.docs.map(d => ({ id: d.id, ...d.data() })));
-        if (laundryDoc.exists()) setLaundryPrices(laundryDoc.data());
-        if (cleaningDoc.exists()) setCleaningPrices(cleaningDoc.data());
-      } catch (e) { console.error(e); } finally { setLoading(false); }
-    };
-    fetchAllData();
-  }, []);
+        if (timeStamp && timeStamp.toDate().getTime() > screenInitTime.getTime()) {
+          const orderId = change.doc.id.substring(0, 5);
+          const clientName = data.userName || "عميل";
+          const status = data.status || "";
 
-  // --- الخدمات الأساسية (Static) ---
-  const staticMainServices = [
-    {
-      id: "single_visit",
-      name: "زيارة مفردة",
-      description: "خدمة نظافة شاملة لمرة واحدة باحترافية عالية لراحة منزلك.",
-      image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQqdXW2Y6Ukrio0ceZzKOJJCp5JORWa6TWRS5USW557iQ&s=10",
-      price: cleaningPrices?.single_price || 0,
-      path: "/singleout?type=single",
-      gradient: "from-[#1E293B] to-purple-800",
-      icon: "✨"
-    },
-    {
-      id: "multi_visit",
-      name: "زيارة متعددة ",
-      description: "باقة الزيارات المتكررة والعقود الشهرية لتوفير أكبر وراحة مستمرة.",
-      image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQtPPMUccXWMhuLxq6N3F0X1KFhw7MLphrzj9ZxgkbeqGkzQl_g0CQT2ow&s=10",
-      price: cleaningPrices?.multi_price || 0,
-      path: "/RahaContract?type=multi",
-      gradient: "from-[#1E293B] to-indigo-800",
-      icon: "📦"
-    }
-  ];
+          if (change.type === "added") {
+            if ((aType === "super" || aType === "cleaning") && status === "pending") {
+              alert(`طلب زيارة جديد 🏠\nقام ${clientName} بطلب خدمة جديدة (رقم ${orderId}). يرجى المراجعة والتأكيد.`);
+            }
+          } else if (change.type === "modified") {
+            if (data.userId === userId) {
+              if (status === "confirmed") alert(`تم تأكيد حجزك ✅\nعزيزي ${clientName}، تم تأكيد طلبك رقم ${orderId} بنجاح.`);
+              if (status === "started") alert(`بدأ العمل الآن 🚀\nفريق راحة بدأ تنفيذ المهمة لطلبك رقم ${orderId}.`);
+              if (status === "completed") alert(`تم إتمام المهمة ✨\nتم إتمام طلبك رقم ${orderId} بنجاح.`);
+            }
+          }
+        }
+      });
+    });
 
-  const handleBooking = (pkg: any) => {
-    setIsNavigating(true);
-    if (pkg.path) {
-      router.push(pkg.path);
-    } else {
-      router.push(`/checkout?id=${pkg.id}`);
-    }
+    onSnapshot(collection(db, "laundry_orders"), (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        const data = change.doc.data();
+        if (!data) return;
+        const timeStamp = change.type === "added" ? data.createdAt : data.updatedAt;
+
+        if (timeStamp && timeStamp.toDate().getTime() > screenInitTime.getTime()) {
+          const orderId = change.doc.id.substring(0, 5);
+          const status = data.status || "";
+          const clientName = data.userName || "عميل";
+
+          if (change.type === "added") {
+            if ((aType === "super" || aType === "laundry") && status === "pending") {
+              alert(`طلب غسيل جديد 🧺\nوصل طلب غسيل جديد من العميل ${clientName} (رقم ${orderId}).`);
+            }
+          } else if (change.type === "modified") {
+            if (data.userId === userId) {
+              if (status === "received") alert(`استلام ناجح 🧺\nتم استلام ملابسك للطلب ${orderId}.`);
+              if (status === "out_for_delivery") alert(`ملابسك في طريقها إليك 🚚\nتم تجهيز الطلب ${orderId} والمندوب في الطريق.`);
+              if (status === "completed") alert(`تم التسليم ✨\nسعدنا بخدمتكم! تم تسليم ملابسك للطلب رقم ${orderId}.`);
+            }
+          }
+        }
+      });
+    });
   };
 
+  // شاشة الانتظار عند جلب البيانات من فايربيس لأول مرة
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-[200] flex flex-col items-center justify-between bg-[#1E293B] font-['Cairo'] text-white p-10" dir="rtl">
+        <div className="flex flex-col items-center justify-center flex-1 gap-6">
+          <div className="w-24 h-24 bg-gradient-to-tr from-blue-600 to-indigo-700 rounded-[30px] flex items-center justify-center shadow-2xl animate-pulse overflow-hidden p-4">
+            <img 
+              src="/images/logo.png" 
+              className="w-full h-full object-contain" 
+              alt="تطبيق راحة" 
+            />
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <h2 className="text-2xl font-black font-['Aljazeera'] tracking-wide">تطبيق راحة</h2>
+            <p className="text-white/60 text-xs tracking-widest animate-bounce">جاري جلب البيانات...</p>
+          </div>
+        </div>
+
+        <div className="w-full max-w-xs flex flex-col items-center gap-3 pb-8">
+          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden relative">
+            <div className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full w-1/2 absolute top-0 left-0 animate-[shimmer_1.5s_infinite_linear]" 
+                 style={{
+                   animationName: 'shimmer',
+                   animationDuration: '1.5s',
+                   animationIterationCount: 'infinite',
+                   animationTimingFunction: 'linear'
+                 }}
+            ></div>
+          </div>
+          <span className="text-[10px] text-white/40 font-bold tracking-tight">يرجى الانتظار قليلاً</span>
+        </div>
+
+        <style jsx>{`
+          @keyframes shimmer {
+            0% { transform: translateX(-150%); }
+            50% { transform: translateX(0%); }
+            100% { transform: translateX(150%); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans text-right pb-40" dir="rtl">
+    <div className="min-h-screen bg-[#F8FAFC] font-['Cairo'] text-right pb-40 select-none antialiased" dir="rtl">
       
-      {/* Loading Overlay */}
       {isNavigating && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white/60 backdrop-blur-sm">
-          <div className="bg-white p-8 rounded-[40px] shadow-2xl flex flex-col items-center gap-4 border-2 border-blue-100 animate-in fade-in zoom-in">
+          <div className="bg-white p-8 rounded-[40px] shadow-2xl flex flex-col items-center gap-4 border-2 border-blue-100">
             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <span className="text-gray-900 font-black text-sm italic">جاري التحميل...</span>
           </div>
         </div>
       )}
 
-      {/* زر الإشراف */}
+      {/* لوحة الإدارة والاشراف العائمة */}
       {isAdmin && (
         <div className="fixed top-24 left-6 z-[60] animate-bounce">
-          <button onClick={() => router.push("/admin/access")} className="bg-red-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center border-4 border-white active:scale-90 font-black text-[10px] italic uppercase">الإشراف</button>
+          <button 
+            onClick={() => { setIsNavigating(true); router.push("/admin/access"); }} 
+            className="bg-red-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center border-4 border-white active:scale-90 font-black text-[10px] italic uppercase"
+          >
+            الإشراف
+          </button>
         </div>
       )}
 
-      {/* Hero Section */}
-      <div className="relative h-[220px] w-full overflow-hidden rounded-b-[50px] shadow-2xl bg-[#1E293B]">
-        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQtPPMUccXWMhuLxq6N3F0X1KFhw7MLphrzj9ZxgkbeqGkzQl_g0CQT2ow&s=10" className="w-full h-full object-cover opacity-80" alt="Hero" />
+      {/* الهيرو كارد المعدل - صورة واضحة 100% وخلفية نص شفافة تظهر الخلفية بالكامل */}
+      <div className="relative h-[220px] w-full overflow-hidden rounded-bl-[60px] shadow-2xl bg-[#1E293B]">
+        {/* الصورة واضحة تماماً وبدون أي تأثير دمج أو عتمة هيدر */}
+        <img 
+          src="/images/hero_bg.jpg" 
+          className="absolute inset-0 w-full h-[150%] object-cover object-bottom opacity-100 z-0" 
+          alt="Hero Background" 
+          fetchPriority="high"
+          loading="eager"
+        />
         
-        {/* Header Elements: Logo & Login */}
-        <div className="absolute top-10 left-8 right-8 flex justify-between items-center z-10">
-          {!user ? (
-            <button 
-              onClick={() => router.push("/login")}
-              className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/30 text-white font-black text-[10px] uppercase italic shadow-lg active:scale-90 transition-all"
-            >
-              تسجيل دخول 👤
-            </button>
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-white/30 flex items-center justify-center text-white text-xs">✔️</div>
-          )}
-          
-          <div className="flex items-center gap-3 bg-white/20 backdrop-blur-xl p-2 px-4 rounded-full border border-white/30 shadow-2xl">
-            <span className="text-white font-black text-lg italic tracking-tighter">راحة</span>
-            <div className="w-8 h-8 rounded-full bg-white overflow-hidden border-2 border-blue-400">
-              <img src="/icon.png" className="w-full h-full object-cover" alt="App Icon" />
-            </div>
+        {/* الصندوق العائم بنسبة شفافية سوداء ناعمة تظهر ما خلفها من تفاصيل الصورة بوضوح تاري وبدون ضبابية */}
+        <div className="absolute inset-x-6 top-10 bg-black/40 p-4 px-5 rounded-[25px] flex justify-between items-center z-10 border border-white/20 shadow-xl">
+          <div className="flex flex-col text-white space-y-1">
+            <span className="text-white text-[14px] font-bold drop-shadow-md">راحة : الحل الذكي لراحتك</span>
+            <span className="text-xs font-black font-['Aljazeera'] text-white drop-shadow-md">للحلول الذكية والموارد البشرية</span>
+          </div>
+
+          <div className="relative cursor-pointer bg-black/30 p-2 rounded-full border border-white/20 shadow-inner" onClick={() => router.push("/notifications")}>
+            <span className="text-xl text-white block">🔔</span>
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-[#1E293B]">
+                {unreadNotificationsCount}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* زر العروض المحدث بتصميم أنيق */}
-      <div className="px-6 -translate-y-8">
+      {/* بانر إكمال الملف الشخصي */}
+      {isProfileIncomplete && (
+        <div className="mx-[25px] mt-5 p-[12px] px-[15px] bg-red-50 border border-red-100 rounded-[20px] flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="text-red-500 text-xl">⚠️</span>
+            <p className="text-red-600 text-[11px] font-bold leading-tight">أكمل بيانات صفحة البروفايل لتواصل أسهل وخدمة أسرع ✨</p>
+          </div>
+          <button 
+            onClick={() => router.push("/profile")}
+            className="text-blue-600 text-[11px] font-black shrink-0 mr-2 hover:underline"
+          >
+            أكمل الآن
+          </button>
+        </div>
+      )}
+
+      {/* كارد البحث والتحرك السريع للحرفيين */}
+      <div className="px-[25px] -translate-y-5">
         <div 
-          onClick={() => { setIsNavigating(true); router.push("/packages"); }} 
-          className="relative bg-gradient-to-r from-blue-600 to-indigo-700 p-6 rounded-[35px] flex justify-between items-center shadow-2xl active:scale-95 transition-all cursor-pointer border-b-4 border-indigo-900 overflow-hidden"
+          onClick={() => { setIsNavigating(true); router.push("/handymen"); }} 
+          className="w-full bg-white p-5 rounded-[30px] flex items-center shadow-lg active:scale-95 transition-all cursor-pointer"
         >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-          <div className="flex items-center gap-4 relative z-10">
-            <div className="bg-white/20 p-2 rounded-2xl backdrop-blur-sm border border-white/20">
-               <span className="text-white text-xl">🏷️</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-white font-black text-sm italic leading-none">جميع العروض الحصرية</span>
-              <span className="text-blue-200 text-[9px] font-bold mt-1 uppercase tracking-wider">خصومات تصل إلى 40%</span>
-            </div>
+          <div className="bg-[#EEF2FF] w-[50px] h-[50px] rounded-full flex items-center justify-center shrink-0">
+             <span className="text-blue-600 text-xl">🛠️</span>
           </div>
-          <div className="bg-white w-10 h-10 rounded-full flex items-center justify-center text-indigo-700 font-black shadow-lg rotate-180">
-            →
+          <div className="flex flex-col justify-center space-y-0.5 mr-[15px]">
+            <span className="text-gray-400 font-bold text-xs">بتفتش في شنو?!</span>
+            <span className="text-[#1E293B] font-black text-xs font-['Aljazeera']">بالخريطه اطلب اقرب حرفي</span>
+          </div>
+          <div className="mr-auto flex items-center gap-2">
+            <span className="bg-emerald-300 text-black text-[9px] font-black px-2.5 py-1 rounded-[10px] whitespace-nowrap"> 100% مجاني </span>
+            <span className="text-gray-400 text-xs font-black">←</span>
           </div>
         </div>
       </div>
 
-      <div className="px-6 space-y-6">
-        <h3 className="text-gray-900 font-black text-2xl italic underline decoration-blue-500 decoration-4 underline-offset-8 px-2">خدماتنا الرئيسية</h3>
+      {/* قسم الخدمات الاحترافية */}
+      <div className="px-[25px] space-y-[15px] mt-4">
+        <h3 className="text-[#1E293B] font-black text-[18px] font-['Aljazeera'] px-1.5">الخدمات الاحترافية</h3>
+
+        <div 
+          onClick={() => { setIsNavigating(true); router.push("/singleout?type=single"); }}
+          className="w-full p-[22px] bg-gradient-to-bl from-[#1E293B] to-[#673AB7] rounded-[40px] flex justify-between items-center shadow-lg cursor-pointer active:scale-98 transition-all"
+        >
+          <div className="flex flex-col text-white space-y-1 pl-4">
+            <h3 className="text-xl font-black font-['Aljazeera']">زيارة منزلية مفردة</h3>
+            <p className="text-white/70 text-[11px] font-bold">✨ زيارة لمرة واحدة فقط، شاملة المعدات وعاملة مدربة لإنجاز مهامك المتعبة</p>
+          </div>
+          <div className="w-[50px] h-[50px] bg-white rounded-full flex items-center justify-center shrink-0 shadow-sm text-xl">✨</div>
+        </div>
+
+        <div 
+          onClick={() => { setIsNavigating(true); router.push("/RahaContract?type=multi"); }}
+          className="w-full p-[22px] bg-gradient-to-bl from-[#1E293B] to-[#3F51B5] rounded-[40px] flex justify-between items-center shadow-lg cursor-pointer active:scale-98 transition-all"
+        >
+          <div className="flex flex-col text-white space-y-1 pl-4">
+            <h3 className="text-xl font-black font-['Aljazeera']">تعاقد الزيارات المتعددة</h3>
+            <p className="text-white/70 text-[11px] font-bold">📦 اشتري راحتك بجدول ثابت.. توفير أكتر، مجهود أقل، وضمان نظافة بيتك بانتظام</p>
+          </div>
+          <div className="w-[50px] h-[50px] bg-white rounded-full flex items-center justify-center shrink-0 shadow-sm text-xl">📦</div>
+        </div>
+
+        <div 
+          onClick={() => { setIsNavigating(true); router.push("/checkout"); }}
+          className="w-full p-[22px] bg-gradient-to-bl from-[#1E293B] to-[#2196F3] rounded-[40px] flex justify-between items-center shadow-lg cursor-pointer active:scale-98 transition-all"
+        >
+          <div className="flex flex-col text-white space-y-1 pl-4">
+            <h3 className="text-xl font-black font-['Aljazeera']">غسيل الملابس (دليفري)</h3>
+            <p className="text-white/70 text-[11px] font-bold">🧺 استلام وتسليم :خليك دايماً قيافة.. هدومك بتجيك مكوية وجاهزة، ومن غير مشوار</p>
+          </div>
+          <div className="w-[50px] h-[50px] bg-white rounded-full flex items-center justify-center shrink-0 shadow-sm text-xl">🧺</div>
+        </div>
+      </div>
+
+      {/* قسم العروض الحصرية الأفقية */}
+      <div className="mt-8 space-y-3">
+        <h3 className="text-[#1E293B] font-black text-[18px] font-['Aljazeera'] px-[30px]">أقوى العروض الحصرية 🔥</h3>
         
-        <div className="grid grid-cols-1 gap-5">
-          {loading ? <div className="h-28 bg-gray-200 animate-pulse rounded-[40px]" /> : (
-            <>
-              {/* الخدمات الثابتة */}
-              {staticMainServices.map((pkg) => Number(pkg.price) > 0 && (
-                <div 
-                  key={pkg.id} 
-                  onClick={() => handleBooking(pkg)}
-                  className={`relative bg-gradient-to-br ${pkg.gradient} rounded-[45px] p-6 shadow-2xl overflow-hidden active:scale-95 transition-all cursor-pointer border-4 border-white`}
-                >
-                  <div className="absolute -right-4 -bottom-4 opacity-20 rotate-12 text-8xl">{pkg.icon}</div>
-                  <div className="relative z-10 flex justify-between items-center text-white">
-                    <div className="space-y-1">
-                      <div className="bg-white/20 backdrop-blur-md w-fit px-3 py-1 rounded-full border border-white/30 text-[8px] font-black uppercase italic">
-                        {pkg.id === "single_visit" ? "زيارة لمرة واحدة" : "باقات توفير"}
-                      </div>
-                      <h3 className="text-2xl font-black italic">{pkg.name}</h3>
-                      <p className="text-white/80 text-[10px] font-bold italic line-clamp-1">{pkg.description}</p>
-                    </div>
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-[#1E293B] text-xl rotate-180 shadow-xl">→</div>
-                  </div>
-                </div>
-              ))}
+        <div className="flex gap-[15px] overflow-x-auto pb-4 pt-1 px-5 scrollbar-none snap-x snap-mandatory text-right" style={{ scrollbarWidth: 'none' }}>
+          {specialPackages.map((pkg) => {
+            const required = parseInt(pkg.minCompletedOrders || "0", 10);
+            const isLocked = completedVisitsCount < required;
+            const offerPrice = parseFloat(pkg.price || "0");
+            
+            let discountBadge = "";
+            if (officialSinglePrice > 0 && offerPrice > 0) {
+              const discount = ((officialSinglePrice - offerPrice) / officialSinglePrice) * 100;
+              if (discount > 0) discountBadge = `${discount.toFixed(0)}%`;
+            }
 
-              {/* غسيل دليفري */}
-              {laundryPrices && (Number(laundryPrices.wash) > 0) && (
-                <div 
-                  onClick={() => { setIsNavigating(true); router.push("/checkout2"); }} 
-                  className="relative bg-gradient-to-br from-[#1E293B] to-blue-700 rounded-[45px] p-6 shadow-2xl overflow-hidden active:scale-95 transition-all cursor-pointer border-4 border-white"
-                >
-                  <div className="absolute -right-4 -bottom-4 opacity-20 rotate-12 text-8xl">🧺</div>
-                  <div className="relative z-10 flex justify-between items-center text-white">
-                    <div className="space-y-1">
-                      <div className="bg-white/20 backdrop-blur-md w-fit px-3 py-1 rounded-full border border-white/30 text-[8px] font-black uppercase italic">خدمة مضافة</div>
-                      <h3 className="text-2xl font-black italic">غسيل دليفري</h3>
-                      <p className="text-blue-100/80 text-[10px] font-bold italic">نستلم ملابسك ونعيدها لك باحترافية</p>
-                    </div>
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-[#1E293B] text-xl rotate-180 shadow-xl">→</div>
+            return (
+              <div 
+                key={pkg.id} 
+                onClick={() => {
+                  if (isLocked) {
+                    alert(`هذا العرض يتطلب ${required} زيارات مكتملة. (لديك حالياً: ${completedVisitsCount})`);
+                    return;
+                  }
+                  setIsNavigating(true);
+                  router.push(`/checkout?id=${pkg.id}`);
+                }} 
+                className="w-[280px] h-[200px] rounded-[30px] p-5 flex flex-col justify-between shadow-md text-white relative overflow-hidden shrink-0 snap-start"
+                style={pkg.image ? { 
+                  backgroundImage: `linear-gradient(${isLocked ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0)'}, ${isLocked ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0)'}), url('${pkg.image}')`, 
+                  backgroundSize: 'cover', 
+                  backgroundPosition: 'center' 
+                } : {
+                  backgroundImage: isLocked 
+                    ? "linear-gradient(to bottom right, #4B5563, #111827)" 
+                    : "linear-gradient(to bottom right, #3B82F6, #1E40AF)"
+                }}
+              >
+                <div>
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="font-black text-[16px] leading-tight font-['Aljazeera'] truncate max-w-[180px]">{pkg.name || "عرض حصري"}</span>
+                    {discountBadge && !isLocked ? (
+                      <span className="bg-red-500 text-[10px] px-2.5 py-1 rounded-[12px] font-black whitespace-nowrap shrink-0">خصم {discountBadge}</span>
+                    ) : (
+                      <span className="text-base shrink-0">{isLocked ? '🔒' : '🏷️'}</span>
+                    )}
                   </div>
+                  <p className="text-white/70 text-[11px] font-medium mt-1.5 line-clamp-2 leading-relaxed">{pkg.description}</p>
                 </div>
-              )}
-
-              {/* العروض الخاصة (Dynamic) */}
-              {specialPackages.map((pkg) => {
-                const isLocked = completedVisitsCount < Number(pkg.minCompletedOrders || 0);
-                return (
-                  <div key={pkg.id} onClick={() => !isLocked && handleBooking(pkg)} className={`p-5 rounded-[45px] border-2 border-dashed flex justify-between items-center transition-all ${isLocked ? 'bg-gray-100 opacity-60 grayscale pointer-events-none' : 'bg-white border-blue-200 shadow-xl cursor-pointer active:scale-95'}`}>
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="relative"><img src={pkg.image} className="w-16 h-16 rounded-[25px] object-cover" alt={pkg.name} />{isLocked && <div className="absolute inset-0 bg-black/30 rounded-[25px] flex items-center justify-center text-white">🔒</div>}</div>
-                      <div className="flex flex-col"><span className="text-gray-900 font-black text-[15px] italic leading-tight">{pkg.name}</span><span className="text-blue-700 font-black text-[12px]">{pkg.price} ج.س</span></div>
-                    </div>
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white rotate-180 ${isLocked ? 'bg-gray-400' : 'bg-blue-700'}`}>{isLocked ? '🏆' : '→'}</div>
-                  </div>
-                );
-              })}
-            </>
-          )}
+                
+                <div className="space-y-1">
+                  {!isLocked && offerPrice > 0 && (
+                    <span className="text-amber-400 font-black text-sm block">السعر الحالي: {offerPrice.toFixed(0)} ج.س</span>
+                  )}
+                  <span className="text-[12px] font-black block text-white/90">
+                    {isLocked ? `🏆 يتطلب ${required} زيارة لفتحه` : "احجز الآن واستفد من الخصم"}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* قسم صور الموظفين */}
-      <div className="px-6 mt-12 grid grid-cols-2 gap-5 h-[180px] opacity-90">
-        <div className="relative overflow-hidden rounded-[40px] shadow-2xl border-4 border-white rotate-2">
-          <img src="https://thumbs.dreamstime.com/z/woman-basket-cleaning-equipment-smiling-african-holding-74155063.jpg" className="w-full h-full object-cover" alt="Staff 1" />
-        </div>
-        <div className="relative overflow-hidden rounded-[40px] shadow-2xl border-4 border-white -rotate-2 translate-y-4">
-          <img src="https://hosawanos.com/wp-content/uploads/2019/02/woman-staff-cleaning.jpg" className="w-full h-full object-cover" alt="Staff 2" />
-        </div>
-      </div>
-
-      {/* زر تثبيت التطبيق */}
       {showInstallBtn && (
-        <div className="px-6 mt-20">
-           <button onClick={() => deferredPrompt?.prompt()} className="w-full bg-gray-900 text-white py-5 rounded-[35px] font-black text-sm shadow-2xl flex items-center justify-center gap-3 border-b-4 border-gray-700 active:scale-95">تثبيت تطبيق "راحة" 📱</button>
+        <div className="px-6 mt-14">
+           <button onClick={() => deferredPrompt?.prompt()} className="w-full bg-gray-900 text-white py-[18px] rounded-[35px] font-black text-xs shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all">تثبيت تطبيق "راحة" لخدمة أسرع 📱</button>
         </div>
       )}
 
