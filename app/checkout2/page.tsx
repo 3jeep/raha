@@ -270,7 +270,7 @@ export default function LaundryCheckout() {
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-xl font-black text-blue-900 italic">{totalPrice.toLocaleString()} ج.س</span>
-                          <span className="text-[10px] text-red-500 font-bold italic">* لا يشمل التوصيل</span>
+                          <span className="text-[10px] text-blue-500 font-bold italic">* السعر شامل التوصيل</span>
                         </div>
                     </div>
                 </div>

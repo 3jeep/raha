@@ -1,4 +1,5 @@
 "use client";
+
 import React, { useState, useEffect, Suspense } from "react";
 import { db, auth } from "@/lib/firebase";
 import { 
@@ -6,12 +7,8 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { 
-  User, Calendar, MapPin, CheckCircle2, Loader2, Info, Clock, ArrowRight
-} from "lucide-react";
-// إضافة getFCMToken للمستوردات
-import { showToast, runSafe, getCurrentGPSLocation, isValidSudanesePhone, getFCMToken } from "@/lib/utils";
-// استيراد منطق الإشعارات الذكي
+import { Loader2 } from "lucide-react";
+import { showToast, runSafe, getCurrentGPSLocation, getFCMToken } from "@/lib/utils";
 import { sendSmartNotification } from "@/utils/notif-logic";
 
 function CheckoutContent() {
@@ -25,8 +22,10 @@ function CheckoutContent() {
   const [locating, setLocating] = useState(false);
   
   const [isDayFull, setIsDayFull] = useState(false);
-  const [totalMaidsCount, setTotalMaidsCount] = useState(0);
+  const [totalMaidsInSystem, setTotalMaidsInSystem] = useState(0);
   const [adminFullDays, setAdminFullDays] = useState<string[]>([]);
+  const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+  const [regions, setRegions] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -34,238 +33,236 @@ function CheckoutContent() {
     gender: "female", 
     startDate: "",        
     locationText: "",    
+    region: "",
     locationCoords: null as { lat: number, lng: number } | null,
-    packageName: "زيارة مفردة - 5 ساعات",
-    price: "0", 
-    category: "single",
+    maidsCount: 1,
+    basePrice: 0,
+    totalHours: 0,
+    shift: "morning",
     status: "pending"
   });
 
-  // --- Logic & Effects ---
+  // --- Initialization ---
   useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const settingsSnap = await getDoc(doc(db, "settings", "cleaning_prices"));
-        if (settingsSnap.exists()) {
-          const data = settingsSnap.data();
-          setFormData(prev => ({
-            ...prev,
-            price: data?.single_price || "0" 
-          }));
-        }
-
-        const maidsSnap = await getDocs(collection(db, "maids"));
-        setTotalMaidsCount(maidsSnap.size);
-
-        onSnapshot(doc(db, "settings", "availability"), (docSnap) => {
-          if (docSnap.exists()) setAdminFullDays(docSnap.data().fullDays || []);
-        });
-
-      } catch (err) {
-        console.error("Error fetching price:", err);
+    const fetchData = async () => {
+      const settingsSnap = await getDoc(doc(db, "settings", "cleaning_prices"));
+      if (settingsSnap.exists()) {
+        const data = settingsSnap.data();
+        setFormData(prev => ({ 
+          ...prev, 
+          basePrice: Number(data.single_price) || 0,
+          totalHours: Number(data.total_hours) || 5 
+        }));
       }
-    };
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) {
-        router.push(`/login`);
-        return;
+      const regionsSnap = await getDoc(doc(db, "settings", "region"));
+      if (regionsSnap.exists()) {
+        setRegions(regionsSnap.data().array || []);
       }
-      setUser(currentUser);
+
+      const maidsSnap = await getDocs(collection(db, "maids"));
+      setTotalMaidsInSystem(maidsSnap.size);
       
-      try {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setFormData(prev => ({
-            ...prev,
-            fullName: data.fullName || "",
-            phone: data.phone || "",
-            locationText: data.address || ""
-          }));
+      onSnapshot(doc(db, "settings", "availability"), (s) => {
+        if (s.exists()) setAdminFullDays(s.data().fullDays || []);
+      });
+    };
+    fetchData();
+    
+    onAuthStateChanged(auth, async (u) => {
+      if (!u) {
+        router.push("/login");
+      } else {
+        setUser(u);
+        try {
+          const userDoc = await getDoc(doc(db, "users", u.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            setFormData(prev => ({
+              ...prev,
+              fullName: userData.fullName || "",
+              phone: userData.phone || "",
+              locationText: userData.address || "",
+              region: userData.region || "" 
+            }));
+          }
+        } catch (err) {
+          console.error("Error fetching user data:", err);
         }
-      } catch (err) {
-        console.error("User fetch error:", err);
       }
       setLoading(false);
     });
-
-    fetchInitialData();
-    return () => unsubscribeAuth();
   }, [router]);
+
+  // --- Logic ---
+  const getOriginalPrice = () => formData.basePrice * formData.maidsCount;
+  const getFinalPrice = () => {
+    const original = getOriginalPrice();
+    const discount = formData.maidsCount === 2 ? 0.05 : formData.maidsCount === 3 ? 0.10 : 0;
+    return original * (1 - discount);
+  };
+
+  const getDayName = (dateStr: string) => {
+    if (!dateStr) return "";
+    const days = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+    return days[new Date(dateStr).getDay()];
+  };
 
   useEffect(() => {
     const checkAvailability = async () => {
-      if (formData.startDate) {
-        if (adminFullDays.includes(formData.startDate)) {
-          setIsDayFull(true);
-          return;
-        }
-        const q = query(collection(db, "bookings"), where("startDate", "==", formData.startDate), where("status", "!=", "cancelled"));
-        const querySnapshot = await getDocs(q);
-        setIsDayFull(querySnapshot.size >= totalMaidsCount);
-      }
+      if (!formData.startDate) return;
+      if (adminFullDays.includes(formData.startDate)) return setIsDayFull(true);
+      
+      const q = query(collection(db, "bookings"), where("startDate", "==", formData.startDate), where("status", "!=", "cancelled"));
+      const snap = await getDocs(q);
+      let bookedMaids = 0;
+      snap.forEach(d => bookedMaids += (d.data().maidsCount || 1));
+      setIsDayFull((bookedMaids + formData.maidsCount) > totalMaidsInSystem);
     };
     checkAvailability();
-  }, [formData.startDate, totalMaidsCount, adminFullDays]);
+  }, [formData.startDate, formData.maidsCount, totalMaidsInSystem, adminFullDays]);
 
-  const handleGetLocation = async () => {
-    setLocating(true);
-    try {
-      const coords = await getCurrentGPSLocation();
-      setFormData(prev => ({ 
-        ...prev, 
-        locationCoords: coords,
-        locationText: prev.locationText + `\n📍 الموقع محدد عبر GPS`
-      }));
-      showToast("📍 تم تحديد موقعك بنجاح", "success");
-    } catch (e: any) {
-      if (e.code === 1 || e.message?.includes("denied")) {
-        showToast("⚠️ الموقع محظور! يرجى السماح بالوصول من إعدادات المتصفح", "error");
-      } else {
-        showToast("❌ فشل تحديد الموقع، تأكد من فتح الـ GPS", "error");
-      }
-    } finally {
-      setLocating(false);
-    }
+  const handleNextStep = () => {
+    if (!formData.startDate) return showToast("⚠️ يرجى اختيار تاريخ الزيارة أولاً", "error");
+    setStep(step + 1);
   };
 
   const handleSubmit = async () => {
     if (isDayFull) return showToast("⚠️ اليوم المختار مكتمل", "error");
-    if (!isValidSudanesePhone(formData.phone)) return;
+    if (!hasAcceptedTerms) return showToast("⚠️ يرجى الموافقة على الشروط أولاً", "error");
+    if (!formData.locationCoords) return showToast("⚠️ يرجى تحديد الموقع عبر GPS", "error");
+    if (!formData.region) return showToast("⚠️ يرجى اختيار المنطقة", "error");
 
     await runSafe(setIsSubmitting, async () => {
-      let token = null;
-      try {
-        token = await getFCMToken();
-      } catch (e) {
-        console.log("FCM Token skipped or denied");
-      }
-
-      // 1. حفظ الطلب في Firestore
-      const docRef = await addDoc(collection(db, "bookings"), {
+      const token = await getFCMToken().catch(() => null);
+      
+      await addDoc(collection(db, "bookings"), {
         ...formData,
         userId: user.uid,
-        email: user.email, 
+        price: getFinalPrice(),
+        packageName: `زيارة مفردة - ${formData.totalHours} ساعات (${formData.maidsCount} عاملة)`,
+        serviceType: "single_visit",
         fcmToken: token,
         createdAt: serverTimestamp(),
-        totalHours: 5, 
       });
 
-      // 2. إرسال إشعار فوري للأدمن (المنطق الجديد)
-      await sendSmartNotification('admin', 'new-order-admin', {
+      await sendSmartNotification('admin', 'new-order-admin', { 
         customerName: formData.fullName,
-        orderId: docRef.id,
-        userId: user.uid
+        orderType: "single_visit" 
       });
-
+      
       showToast("🚀 تم حجز موعدك بنجاح!");
       router.replace("/my-chekout");
     });
   };
 
-  if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white gap-4 font-black text-blue-600">
-      <Loader2 className="animate-spin" size={40} />
-      <p className="italic text-sm">جاري تحضير طلبك...</p>
-    </div>
-  );
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50 font-sans text-right" dir="rtl">
-      
-      {/* Header */}
-      <div className="bg-[#1E293B] text-white p-6 rounded-b-[40px] shadow-lg shrink-0 z-10 relative overflow-hidden">
-        <div className="relative z-10">
-            <h1 className="text-xl font-black italic">طلب زيارة مفردة ✨</h1>
-            <p className="text-[10px] text-blue-300 font-bold mt-1">خدمة الـ 5 ساعات</p>
-            <div className="flex gap-2 mt-4">
-            {[1, 2].map((s) => (
-                <div key={s} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${step >= s ? 'bg-blue-500' : 'bg-slate-700'}`} />
-            ))}
+    <div className="p-6 bg-slate-50 min-h-screen pb-24" dir="rtl">
+      <div className="mb-6 flex gap-2">
+        {[1, 2, 3].map(s => <div key={s} className={`h-2 flex-1 rounded-full ${step >= s ? 'bg-blue-600' : 'bg-slate-200'}`} />)}
+      </div>
+
+      {step === 1 && (
+        <div className="space-y-4 animate-in fade-in">
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+            <h2 className="text-lg font-black mb-2">تفاصيل الخدمة</h2>
+            <div className="flex items-center gap-3 mb-4">
+                <span className="text-3xl font-black text-blue-600">{getFinalPrice()} ج.س</span>
+                {formData.maidsCount > 1 && <span className="text-sm font-bold text-slate-400 line-through">{getOriginalPrice()} ج.س</span>}
             </div>
+            
+            {/* إضافة توضيح الخصم */}
+            <div className="text-xs font-bold text-emerald-600 mb-4 bg-emerald-50 p-2 rounded-lg">
+                {formData.maidsCount === 2 ? "خصم 5% للعامله الثانية" : formData.maidsCount === 3 ? "خصم 10% للعامله الثالثة" : "عروض خاصة عند زيادة عدد العاملات!"}
+            </div>
+
+            <select value={formData.shift} onChange={e => setFormData({...formData, shift: e.target.value})} className="w-full p-4 border rounded-2xl font-bold bg-slate-50">
+                <option value="morning">الفترة الصباحية</option>
+                <option value="afternoon">الفترة المسائية</option>
+            </select>
+
+            <div className="flex items-center justify-between mt-4 p-4 border rounded-2xl bg-slate-50">
+              <span className="font-bold">عدد العاملات</span>
+              <div className="flex items-center gap-4">
+                <button onClick={() => setFormData({...formData, maidsCount: Math.max(1, formData.maidsCount - 1)})} className="w-8 h-8 rounded-full bg-slate-200">-</button>
+                <span className="font-black">{formData.maidsCount}</span>
+                <button onClick={() => setFormData({...formData, maidsCount: Math.min(3, formData.maidsCount + 1)})} className="w-8 h-8 rounded-full bg-blue-600 text-white">+</button>
+              </div>
+            </div>
+
+            <input value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} placeholder="الاسم الكامل" className="w-full mt-4 p-4 border rounded-2xl font-bold" />
+            <input type="date" min={new Date().toISOString().split('T')[0]} value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} className={`w-full mt-4 p-4 border rounded-2xl font-bold ${isDayFull ? 'bg-red-50 text-red-600' : ''}`} />
+          </div>
         </div>
-        <div className="absolute top-[-20px] left-[-20px] w-32 h-32 bg-blue-500/10 rounded-full blur-3xl"></div>
-      </div>
+      )}
 
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
-        
-        {step === 1 && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-white p-6 rounded-[35px] border border-slate-200 shadow-sm flex justify-between items-center">
-                <div>
-                    <span className="text-[10px] font-black text-slate-400 block italic uppercase">تكلفة الخدمة</span>
-                    <span className="text-2xl font-black text-slate-800 italic">{formData.price} <small className="text-[10px]">ج.س</small></span>
-                </div>
-                <div className="text-left font-black text-blue-600 italic">
-                    🕒 5 ساعات
-                </div>
-            </div>
+      {/* الخطوات 2 و 3 تبقى كما هي */}
+      {step === 2 && (
+        <div className="bg-white p-6 rounded-3xl shadow-sm animate-in fade-in space-y-4">
+           <button onClick={async () => { setLocating(true); const c = await getCurrentGPSLocation(); setFormData({...formData, locationCoords: c}); setLocating(false); }} className="w-full py-6 bg-blue-50 text-blue-600 rounded-2xl font-bold flex items-center justify-center gap-2">
+             {locating ? <Loader2 className="animate-spin" /> : "📍 تحديد الموقع الحالي (GPS)"}
+           </button>
+           
+           <select 
+             value={formData.region} 
+             onChange={e => setFormData({...formData, region: e.target.value})} 
+             className="w-full p-4 border rounded-2xl font-bold bg-slate-50"
+           >
+             <option value="">اختر المنطقة</option>
+             {regions.map((region) => (
+                <option key={region} value={region}>{region}</option>
+             ))}
+           </select>
 
-            <div className="bg-white p-6 rounded-[35px] border border-slate-200 shadow-sm space-y-4">
-              <h3 className="font-black text-xs flex items-center gap-2 text-slate-800 italic"> <User size={16} className="text-blue-600"/> البيانات الأساسية</h3>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <button type="button" onClick={() => setFormData({...formData, gender: "female"})} className={`py-4 rounded-2xl text-[14px] font-black border transition-all ${formData.gender === 'female' ? 'bg-pink-50 text-pink-600 border-pink-100' : 'bg-slate-50 text-slate-400 border-transparent'}`}>👩 أنثى</button>
-                <button type="button" onClick={() => setFormData({...formData, gender: "male"})} className={`py-4 rounded-2xl text-[14px] font-black border transition-all ${formData.gender === 'male' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-slate-50 text-slate-400 border-transparent'}`}>👨 ذكر</button>
-              </div>
+           <textarea value={formData.locationText} onChange={e => setFormData({...formData, locationText: e.target.value})} placeholder="وصف إضافي للعنوان..." className="w-full p-4 border rounded-2xl h-32" />
+        </div>
+      )}
 
-              <input value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} placeholder="الاسم الكامل" className="w-full p-4 rounded-2xl bg-slate-50 text-xs font-black outline-none border focus:border-blue-400" />
-              <input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="رقم الهاتف" className="w-full p-4 rounded-2xl bg-slate-50 text-xs font-black outline-none text-left" dir="ltr" />
-              
-              <div className="pt-2">
-                <label className="text-[10px] font-black text-slate-400 block mb-2 mr-2 italic">تاريخ الزيارة:</label>
-                <input 
-                  type="date" 
-                  min={new Date().toISOString().split('T')[0]} 
-                  value={formData.startDate} 
-                  onChange={e => setFormData({...formData, startDate: e.target.value})} 
-                  className={`w-full p-4 rounded-2xl text-xs font-black outline-none border transition-all ${isDayFull ? 'bg-red-50 border-red-200 text-red-600' : 'bg-slate-50 focus:border-blue-400'}`} 
-                />
-              </div>
-            </div>
+      {step === 3 && (
+        <div className="bg-white p-6 rounded-3xl shadow-sm animate-in fade-in">
+          <h2 className="font-black text-lg mb-4">تفاصيل وبنود الخدمة</h2>
+          
+          <div className="bg-blue-50 p-4 rounded-2xl mb-6 text-sm font-bold space-y-2">
+            <p>👥 عدد العاملات: <span className="text-blue-600">{formData.maidsCount} عاملة</span></p>
+            <p>⏳ عدد الساعات: <span className="text-blue-600">{formData.totalHours} ساعات</span></p>
+            <p>📅 الموعد: <span className="text-blue-600">{getDayName(formData.startDate)} - {formData.startDate}</span></p>
           </div>
-        )}
 
-        {step === 2 && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-left-4 duration-500">
-            <div className="bg-white p-7 rounded-[35px] shadow-sm border border-slate-200 space-y-5">
-              <h3 className="font-black text-xs text-slate-800 flex items-center gap-2 italic"> <MapPin size={18} className="text-blue-600" /> موقع التنفيذ </h3>
-              <button onClick={handleGetLocation} className="w-full py-5 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 font-black text-[11px] flex items-center justify-center gap-2 active:scale-95 transition-all">
-                {locating ? <Loader2 className="animate-spin" size={16} /> : <MapPin size={16} />}
-                تحديد الموقع الحالي (GPS)
-              </button>
-              <textarea value={formData.locationText} onChange={e => setFormData({...formData, locationText: e.target.value})} placeholder="وصف دقيق للعنوان..." className="w-full p-5 rounded-2xl bg-slate-50 text-xs font-bold outline-none h-40 border focus:border-blue-400" />
-            </div>
+          <div className="text-xs text-slate-500 space-y-3 leading-loose">
+            <p>1. يرجى التأكد من تواجد سيدة المنزل ويمنع تواجد العاملة بدون تواجد سيدة المنزل.</p>
+            <p>2. الخدمة تشمل {formData.totalHours} ساعات عمل متواصلة؛ أي طلب تمديد يخضع لرسوم إضافية.</p>
+            <p>3. في حال الإلغاء قبل الموعد بـ 3 ساعات، لا يتم استرداد رسوم الحجز.</p>
+            <p>4. يمكنك من الساعة الأولى طلب وقف العاملة وسيتم تغيير العاملة في حين توفرها حسب جدول راحة.</p>
+            <p>5. أدوات النظافة هدية من راحة.</p>
+            <p>6. يتم غسيل الملابس عن طريق الغسالة فقط، ويمنع الغسيل اليدوي.</p>
           </div>
-        )}
-      </div>
+          
+          <label className="flex items-center gap-3 mt-6 p-4 border rounded-2xl cursor-pointer">
+            <input type="checkbox" className="w-5 h-5" checked={hasAcceptedTerms} onChange={e => setHasAcceptedTerms(e.target.checked)} />
+            <span className="font-bold text-sm">أوافق على كافة البنود والشروط المذكورة</span>
+          </label>
+        </div>
+      )}
 
-      {/* Footer */}
-      <div className="bg-white p-6 rounded-t-[45px] shadow-[0_-15px_40px_rgba(0,0,0,0.08)] border-t border-slate-100 shrink-0 z-20">
-        <div className="flex gap-2">
-            {step > 1 && (
-                <button onClick={() => setStep(step - 1)} className="px-6 bg-slate-100 text-slate-600 rounded-[25px] font-black text-xs">السابق</button>
-            )}
-            <button
-              onClick={() => {
-                if (step === 1) {
-                    if (!formData.fullName || !formData.startDate || !formData.phone) return showToast("⚠️ أكمل البيانات", "info");
-                    setStep(2);
-                } else {
-                    if (!formData.locationCoords) {
-                      return showToast("⚠️ يرجى الضغط على زر تحديد الموقع (GPS) أولاً لضمان دقة الخدمة", "error");
-                    }
-                    handleSubmit();
-                }
-              }}
-              disabled={isSubmitting}
-              className={`flex-1 py-5 rounded-[30px] font-black text-sm shadow-xl transition-all flex items-center justify-center gap-2 ${
-                isSubmitting ? 'bg-slate-100 text-slate-300' : 'bg-[#1E293B] text-white active:scale-95'
-              }`}
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t rounded-t-3xl shadow-lg">
+        <div className="flex gap-3">
+          {step > 1 && (
+            <button 
+              onClick={() => setStep(step - 1)}
+              className="py-4 px-8 bg-slate-100 rounded-2xl font-black text-slate-700 active:scale-95 transition-all"
             >
-              {isSubmitting ? <Loader2 className="animate-spin" /> : step === 2 ? "تأكيد الحجز النهائي 🚀" : "استمرار ➡️"}
+              رجوع
             </button>
+          )}
+          <button 
+            onClick={() => step < 3 ? handleNextStep() : handleSubmit()} 
+            disabled={isSubmitting}
+            className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black text-lg active:scale-95 transition-all"
+          >
+            {isSubmitting ? <Loader2 className="animate-spin mx-auto" /> : step === 3 ? "تأكيد الحجز النهائي" : "استمرار"}
+          </button>
         </div>
       </div>
     </div>
@@ -273,9 +270,5 @@ function CheckoutContent() {
 }
 
 export default function CheckoutPage() {
-  return (
-    <Suspense fallback={<div className="h-screen flex items-center justify-center font-black text-xs text-gray-900 italic animate-pulse">Loading...</div>}>
-      <CheckoutContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<div className="h-screen flex items-center justify-center">Loading...</div>}><CheckoutContent /></Suspense>;
 }
