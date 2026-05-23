@@ -1,4 +1,10 @@
 {
+  "app/admin/orders/page.tsx -> @/components/LiveTrackingModal": {
+    "id": "app/admin/orders/page.tsx -> @/components/LiveTrackingModal",
+    "files": [
+      "static/chunks/_app-pages-browser_components_LiveTrackingModal_tsx.js"
+    ]
+  },
   "node_modules/next/dist/client/dev/hot-reloader/app/web-socket.js -> @vercel/turbopack-ecmascript-runtime/browser/dev/hmr-client/hmr-client.ts": {
     "id": "node_modules/next/dist/client/dev/hot-reloader/app/web-socket.js -> @vercel/turbopack-ecmascript-runtime/browser/dev/hmr-client/hmr-client.ts",
     "files": [

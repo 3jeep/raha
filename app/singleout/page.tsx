@@ -51,7 +51,7 @@ function CheckoutContent() {
         setFormData(prev => ({ 
           ...prev, 
           basePrice: Number(data.single_price) || 0,
-          totalHours: Number(data.total_hours) || 5 
+          totalHours: Number(data.single_hours) || 5 
         }));
       }
 

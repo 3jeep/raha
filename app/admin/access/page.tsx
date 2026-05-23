@@ -92,7 +92,7 @@ export default function AccessPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4">
-      {/* هيدر الصفحة المحدث مع رابط صفحة التنظيف */}
+      {/* هيدر الصفحة */}
       <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-800 italic flex items-center gap-3">
@@ -102,8 +102,24 @@ export default function AccessPage() {
           <p className="text-[11px] text-slate-400 font-black mr-12 uppercase tracking-tighter">نظام منح وإلغاء صلاحيات الموظفين</p>
         </div>
         
-        <div className="flex gap-2 w-full sm:w-auto">
-            {/* زر تنظيف البيانات الجديد */}
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            {/* رابط الإحصائيات */}
+            <Link 
+              href="/admin/StatisticsPage" 
+              className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-3 rounded-2xl text-[10px] font-black hover:bg-indigo-600 hover:text-white transition-all border border-indigo-100 shadow-sm"
+            >
+              <span>📊</span> الإحصائيات
+            </Link>
+
+            {/* رابط إدارة المستخدمين */}
+            <Link 
+              href="/admin/UsersManagement" 
+              className="flex items-center gap-2 bg-emerald-50 text-emerald-600 px-4 py-3 rounded-2xl text-[10px] font-black hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 shadow-sm"
+            >
+              <span>👥</span> إدارة المستخدمين
+            </Link>
+
+            {/* زر تنظيف البيانات */}
             <Link 
               href="/admin/Clear" 
               className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-[10px] font-black hover:bg-red-600 hover:text-white transition-all border border-red-100 shadow-sm"
@@ -111,6 +127,7 @@ export default function AccessPage() {
               <span>🔥</span> تنظيف البيانات
             </Link>
 
+            {/* زر إعدادات النظام */}
             <Link 
               href="/admin/settings" 
               className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-3 rounded-2xl text-[10px] font-black hover:bg-blue-600 hover:text-white transition-all border border-blue-100 shadow-sm"

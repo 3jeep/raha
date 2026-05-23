@@ -236,7 +236,6 @@ export default function WelcomePage() {
     });
   };
 
-  // شاشة الانتظار عند جلب البيانات من فايربيس لأول مرة
   if (loading) {
     return (
       <div className="fixed inset-0 z-[200] flex flex-col items-center justify-between bg-[#1E293B] font-['Cairo'] text-white p-10" dir="rtl">
@@ -291,7 +290,6 @@ export default function WelcomePage() {
         </div>
       )}
 
-      {/* لوحة الإدارة والاشراف العائمة */}
       {isAdmin && (
         <div className="fixed top-24 left-6 z-[60] animate-bounce">
           <button 
@@ -303,9 +301,7 @@ export default function WelcomePage() {
         </div>
       )}
 
-      {/* الهيرو كارد المعدل - صورة واضحة 100% وخلفية نص شفافة تظهر الخلفية بالكامل */}
       <div className="relative h-[220px] w-full overflow-hidden rounded-bl-[60px] shadow-2xl bg-[#1E293B]">
-        {/* الصورة واضحة تماماً وبدون أي تأثير دمج أو عتمة هيدر */}
         <img 
           src="/images/hero_bg.jpg" 
           className="absolute inset-0 w-full h-[150%] object-cover object-bottom opacity-100 z-0" 
@@ -314,7 +310,6 @@ export default function WelcomePage() {
           loading="eager"
         />
         
-        {/* الصندوق العائم بنسبة شفافية سوداء ناعمة تظهر ما خلفها من تفاصيل الصورة بوضوح تاري وبدون ضبابية */}
         <div className="absolute inset-x-6 top-10 bg-black/40 p-4 px-5 rounded-[25px] flex justify-between items-center z-10 border border-white/20 shadow-xl">
           <div className="flex flex-col text-white space-y-1">
             <span className="text-white text-[14px] font-bold drop-shadow-md">راحة : الحل الذكي لراحتك</span>
@@ -332,7 +327,6 @@ export default function WelcomePage() {
         </div>
       </div>
 
-      {/* بانر إكمال الملف الشخصي */}
       {isProfileIncomplete && (
         <div className="mx-[25px] mt-5 p-[12px] px-[15px] bg-red-50 border border-red-100 rounded-[20px] flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2.5">
@@ -348,7 +342,6 @@ export default function WelcomePage() {
         </div>
       )}
 
-      {/* كارد البحث والتحرك السريع للحرفيين */}
       <div className="px-[25px] -translate-y-5">
         <div 
           onClick={() => { setIsNavigating(true); router.push("/handymen"); }} 
@@ -368,7 +361,6 @@ export default function WelcomePage() {
         </div>
       </div>
 
-      {/* قسم الخدمات الاحترافية */}
       <div className="px-[25px] space-y-[15px] mt-4">
         <h3 className="text-[#1E293B] font-black text-[18px] font-['Aljazeera'] px-1.5">الخدمات الاحترافية</h3>
 
@@ -394,6 +386,18 @@ export default function WelcomePage() {
           <div className="w-[50px] h-[50px] bg-white rounded-full flex items-center justify-center shrink-0 shadow-sm text-xl">📦</div>
         </div>
 
+        {/* الجديد: بطاقة زيارة المناسبات */}
+        <div 
+          onClick={() => { setIsNavigating(true); router.push("/event"); }}
+          className="w-full p-[22px] bg-gradient-to-bl from-[#1E293B] to-[#E91E63] rounded-[40px] flex justify-between items-center shadow-lg cursor-pointer active:scale-98 transition-all"
+        >
+          <div className="flex flex-col text-white space-y-1 pl-4">
+            <h3 className="text-xl font-black font-['Aljazeera']">زيارة المناسبات</h3>
+            <p className="text-white/70 text-[11px] font-bold">🎊 للمناسبات الكبيرة والاحتفالات، فريق متكامل لضمان نظافة وترتيب مكانك بأعلى جودة</p>
+          </div>
+          <div className="w-[50px] h-[50px] bg-white rounded-full flex items-center justify-center shrink-0 shadow-sm text-xl">🎊</div>
+        </div>
+
         <div 
           onClick={() => { setIsNavigating(true); router.push("/checkout2"); }}
           className="w-full p-[22px] bg-gradient-to-bl from-[#1E293B] to-[#2196F3] rounded-[40px] flex justify-between items-center shadow-lg cursor-pointer active:scale-98 transition-all"
@@ -406,7 +410,6 @@ export default function WelcomePage() {
         </div>
       </div>
 
-      {/* قسم العروض الحصرية الأفقية */}
       <div className="mt-8 space-y-3">
         <h3 className="text-[#1E293B] font-black text-[18px] font-['Aljazeera'] px-[30px]">أقوى العروض الحصرية 🔥</h3>
         

@@ -1,3 +1,8 @@
 {
-  "/_not-found/page": "app/_not-found/page.js"
+  "/event/page": "app/event/page.js",
+  "/my-chekout/page": "app/my-chekout/page.js",
+  "/page": "app/page.js",
+  "/admin/access/page": "app/admin/access/page.js",
+  "/admin/orders/page": "app/admin/orders/page.js",
+  "/admin/page": "app/admin/page.js"
 }
